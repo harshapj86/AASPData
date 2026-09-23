@@ -1,0 +1,3737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aptronix Service — Executive Dashboard</title>
+<script>
+(function(){
+  var sources = [
+    'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js',
+    'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js',
+    'https://unpkg.com/chart.js@4.4.1/dist/chart.umd.min.js'
+  ];
+  var idx = 0;
+  function tryNext(){
+    if(idx >= sources.length) return;
+    var s = document.createElement('script');
+    s.src = sources[idx];
+    s.onload = function(){
+      if(typeof Chart === 'undefined'){ idx++; tryNext(); return; }
+      window.__CHARTS_AVAILABLE__ = true;
+      window.dispatchEvent(new Event('chartjs-ready'));
+    };
+    s.onerror = function(){ idx++; tryNext(); };
+    document.head.appendChild(s);
+  }
+  tryNext();
+})();
+(function(){
+  // Lucide icons for sidebar nav — falls back to the original glyph characters
+  // (kept as the element's fallback text content) if no CDN is reachable.
+  var sources = [
+    'https://unpkg.com/lucide@latest',
+    'https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.js'
+  ];
+  var idx = 0;
+  function tryNext(){
+    if(idx >= sources.length) return;
+    var s = document.createElement('script');
+    s.src = sources[idx];
+    s.onload = function(){
+      if(typeof window.lucide === 'undefined'){ idx++; tryNext(); return; }
+      window.dispatchEvent(new Event('lucide-ready'));
+    };
+    s.onerror = function(){ idx++; tryNext(); };
+    document.head.appendChild(s);
+  }
+  tryNext();
+})();
+</script>
+<style>
+:root{
+  --bg:#eef1f6;
+  --panel:#ffffff;
+  --panel-2:#f5f7fb;
+  --border:#e2e6ee;
+  --border-soft:#edf0f5;
+  --text:#131b2e;
+  --text-dim:#5b6478;
+  --text-faint:#697086;
+  --accent:#3355ee;
+  --accent-2:#0ea5a0;
+  --warn:#d97706;
+  --bad:#dc2626;
+  --good:#16a34a;
+  --gold:#c8890a;
+  --sidebar-bg:#0d1b3a;
+  --sidebar-bg-2:#122452;
+  --sidebar-active:#1e3a8a;
+  --sidebar-text:#c9d3ec;
+  --sidebar-text-dim:#7c88ab;
+  --radius:14px;
+  --font-display:'Cambon','Iowan Old Style',Georgia,serif;
+  --font-body:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;
+  --font-mono:'SF Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+:root[data-theme="dark"]{
+  --bg:#0b0f1a;
+  --panel:#131a2b;
+  --panel-2:#1a2338;
+  --border:#232d47;
+  --border-soft:#1d2740;
+  --text:#e8ecf5;
+  --text-dim:#aab2c8;
+  --text-faint:#95a0ba;
+  --accent:#6b8bff;
+  --accent-2:#2dd4c5;
+  --warn:#fbbf24;
+  --bad:#f87171;
+  --good:#4ade80;
+  --gold:#e0a840;
+  --sidebar-bg:#080d1c;
+  --sidebar-bg-2:#0d1730;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--font-body);}
+body{font-size:14px;line-height:1.45;}
+body, .panel, .kpi, #sidebar, #topbar, #filterbar, .insight-card, .hero-card{transition:background-color .2s ease, border-color .2s ease, color .2s ease;}
+::-webkit-scrollbar{height:8px;width:8px;}
+::-webkit-scrollbar-thumb{background:#c7cede;border-radius:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+a{color:var(--accent);}
+
+/* ---------- App shell: sidebar + content column ---------- */
+#app-shell{display:flex;min-height:100vh;align-items:stretch;}
+
+#sidebar{
+  width:250px;flex:0 0 250px;background:linear-gradient(180deg,var(--sidebar-bg) 0%, var(--sidebar-bg-2) 100%);
+  display:flex;flex-direction:column;padding:22px 16px;position:sticky;top:0;height:100vh;overflow-y:auto;
+}
+#brand{padding:0 6px 22px 6px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:16px;}
+#brand .brand-title{font-family:var(--font-display);font-size:18px;font-weight:700;color:#fff;letter-spacing:.2px;}
+#brand .brand-sub{font-size:9.5px;color:var(--sidebar-text-dim);text-transform:uppercase;letter-spacing:.8px;margin-top:3px;}
+
+#sidebar-footnote{
+  margin-top:auto;padding:12px 10px;background:rgba(255,255,255,.04);border-radius:10px;
+  font-size:10.5px;color:var(--sidebar-text-dim);line-height:1.5;
+}
+
+#content-col{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;}
+
+/* ---------- Data confidence / top bar (now in content column) ---------- */
+#topbar{
+  background:var(--panel);border-bottom:1px solid var(--border);
+  padding:12px 24px;
+}
+#topbar-row{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+#topbar .tb-meta{font-size:12.5px;color:var(--text-dim);}
+#topbar .tb-meta b{color:var(--text);font-weight:600;}
+#asof{font-size:11px;color:var(--text-faint);}
+.validation-pill{
+  display:inline-flex;align-items:center;gap:6px;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;
+  padding:5px 12px;border-radius:20px;font-size:11.5px;font-weight:600;
+}
+.validation-pill.warn{background:#fffbeb;border-color:#fde68a;color:#b45309;}
+.validation-pill .dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+
+/* ---------- Breadcrumb ---------- */
+#breadcrumb{
+  display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim);
+  padding:10px 24px 0 24px;flex-wrap:wrap;
+}
+#breadcrumb .crumb{cursor:pointer;padding:3px 9px;border-radius:20px;background:var(--panel);border:1px solid var(--border);}
+#breadcrumb .crumb:hover{border-color:var(--accent);color:var(--accent);}
+#breadcrumb .sep{color:var(--text-faint);}
+#breadcrumb .clear{margin-left:8px;cursor:pointer;color:var(--text-faint);font-size:11px;text-decoration:underline;text-underline-offset:2px;}
+#breadcrumb .clear:hover{color:var(--bad);}
+
+/* ---------- Filter bar ---------- */
+#filterbar{
+  padding:14px 24px 10px 24px;border-bottom:1px solid var(--border);
+  background:var(--panel);
+}
+.filter-row-main{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.filter-row-actions{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  margin-top:12px;padding-top:12px;border-top:1px solid var(--border-soft);
+}
+.filter-row-actions .actions-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.fdivider{width:1px;align-self:stretch;background:var(--border);margin:2px 6px;}
+@media(max-width:900px){ .fdivider{display:none;} }
+
+.fchip{
+  display:flex;align-items:center;gap:7px;height:38px;padding:0 11px;
+  background:var(--panel);border:1px solid var(--border);border-radius:10px;
+  transition:border-color .15s ease, box-shadow .15s ease;
+}
+.fchip:hover{border-color:#b9c0d4;}
+.fchip:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(51,85,238,.12);}
+.fchip-label{font-size:12px;color:var(--text-faint);white-space:nowrap;font-weight:500;}
+.fchip select{
+  appearance:none;-webkit-appearance:none;-moz-appearance:none;
+  border:none;background:transparent;color:var(--text);
+  font-size:12.5px;font-weight:600;font-family:var(--font-body);
+  height:100%;cursor:pointer;min-width:0;
+  padding-right:16px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23697086' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right center;
+}
+:root[data-theme="dark"] .fchip select{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2395a0ba' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.fchip select:focus{outline:none;}
+.fchip input[type=date]{
+  border:none;background:transparent;color:var(--text);font-size:12.5px;font-weight:600;
+  font-family:var(--font-body);padding:0;height:100%;cursor:pointer;min-width:96px;
+}
+.fchip input[type=date]:focus{outline:none;}
+.fchip input[type=date]::-webkit-calendar-picker-indicator{opacity:.45;cursor:pointer;}
+.fchip input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:.8;}
+
+.filter-count-badge{
+  height:38px;box-sizing:border-box;display:inline-flex;align-items:center;
+  font-size:11.5px;font-weight:600;color:var(--accent);
+  background:var(--panel-2);border:1px solid var(--border);padding:0 13px;border-radius:10px;white-space:nowrap;
+}
+.quick-filter-group{
+  display:flex;background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:3px;gap:2px;height:38px;box-sizing:border-box;
+}
+.quick-btn{
+  background:transparent;border:none;color:var(--text-dim);
+  padding:0 13px;border-radius:7px;font-size:12.5px;font-weight:600;cursor:pointer;
+  transition:background .15s ease, color .15s ease;
+}
+.quick-btn:hover{color:var(--text);}
+.quick-btn.active{background:var(--panel);color:var(--accent);box-shadow:0 1px 2px rgba(20,30,60,.08);}
+#resetFilters{
+  background:transparent;border:none;color:var(--text-faint);
+  height:38px;padding:0 10px;font-size:12px;cursor:pointer;font-weight:500;
+}
+#resetFilters:hover{color:var(--bad);}
+.fspacer{flex:1;}
+#exportMenu{
+  display:flex;align-items:center;height:38px;
+  background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden;
+}
+.btn-export{
+  background:transparent;border:none;border-right:1px solid var(--border);color:var(--text-dim);
+  height:100%;padding:0 14px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px;font-weight:500;
+  transition:background .15s ease, color .15s ease;
+}
+.btn-export:last-child{border-right:none;}
+.btn-export:hover{background:var(--panel-2);color:var(--accent);}
+
+/* ---------- Sidebar nav (built from #tabbar) ---------- */
+#tabbar{display:flex;flex-direction:column;gap:2px;overflow-y:auto;flex:1 1 auto;}
+.tab-group-header{
+  display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;
+  padding:12px 12px 5px 12px;font-size:9.5px;text-transform:uppercase;letter-spacing:.7px;font-weight:700;
+  color:var(--sidebar-text-dim);
+}
+.tab-group-header:first-child{padding-top:2px;}
+.tab-group-header:hover{color:var(--sidebar-text);}
+.tab-group-header .tgh-chevron{font-size:9px;opacity:.8;}
+.tab{
+  padding:10px 12px;font-size:12.5px;color:var(--sidebar-text);cursor:pointer;border-radius:9px;
+  user-select:none;font-weight:500;display:flex;align-items:center;gap:10px;white-space:nowrap;
+}
+.tab .tab-icon{font-size:13px;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;opacity:.85;}
+.tab .tab-icon svg{width:15px;height:15px;stroke:currentColor;}
+.tab:hover{background:rgba(255,255,255,.06);color:#fff;}
+.tab.active{background:var(--sidebar-active);color:#fff;font-weight:600;}
+
+/* ---------- Main ---------- */
+#main{padding:22px 24px;max-width:1600px;margin:0 auto;width:100%;}
+.view{display:none;}
+.view.active{display:block;animation:fadein .25s ease;}
+@keyframes fadein{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+.section-title{font-family:var(--font-display);font-size:17px;margin:26px 0 12px 0;font-weight:700;color:var(--text);}
+.section-title:first-child{margin-top:0;}
+.section-sub{font-size:11.5px;color:var(--text-faint);margin:-8px 0 12px 0;}
+
+/* ---------- KPI cards ---------- */
+.kpi-grid{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:20px;}
+.kpi-grid .kpi{flex:1 1 190px;}
+.kpi{
+  background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px 17px;
+  position:relative;overflow:hidden;box-shadow:0 1px 2px rgba(20,30,60,.04);
+}
+.kpi .label{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-faint);margin-bottom:9px;font-weight:600;}
+.kpi .value{font-family:var(--font-display);font-size:25px;font-weight:700;color:var(--text);}
+.kpi .delta{font-size:11.5px;margin-top:7px;display:flex;align-items:center;gap:4px;}
+.kpi .delta.up{color:var(--good);}
+.kpi .delta.down{color:var(--bad);}
+.kpi .delta.flat{color:var(--text-faint);}
+.kpi .accent-bar{position:absolute;left:0;top:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--accent-2));}
+@keyframes kpiValueIn{from{opacity:.35;transform:translateY(3px);}to{opacity:1;transform:none;}}
+.kpi .value{animation:kpiValueIn .35s ease;}
+
+/* ---------- Panels / grid ---------- */
+.grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+@media(max-width:980px){.grid2,.grid3{grid-template-columns:1fr;}}
+.panel{
+  background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;
+  box-shadow:0 1px 2px rgba(20,30,60,.04);
+}
+.panel h3{font-size:13px;margin:0 0 14px 0;font-weight:700;color:var(--text);display:flex;justify-content:space-between;align-items:center;}
+.panel h3 .tag{font-size:10px;font-weight:500;color:var(--text-faint);text-transform:none;}
+.chart-wrap{position:relative;width:100%;}
+
+/* ---------- Tables ---------- */
+table.data-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+table.data-table th{
+  text-align:left;padding:9px 11px;color:var(--text-faint);font-weight:700;font-size:10.5px;
+  text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);cursor:pointer;white-space:nowrap;
+}
+table.data-table th:hover{color:var(--accent);}
+table.data-table th.th-sorted{color:var(--accent);}
+table.data-table td{padding:8px 11px;border-bottom:1px solid var(--border-soft);color:var(--text);white-space:nowrap;}
+table.data-table tbody tr{cursor:pointer;}
+table.data-table tbody tr:hover{background:rgba(51,85,238,.05);}
+table.data-table td.num{text-align:right;font-variant-numeric:tabular-nums;}
+.rank-badge{
+  display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:6px;
+  font-size:10.5px;font-weight:700;background:var(--panel-2);color:var(--text-dim);margin-right:6px;
+}
+.rank-badge.top{background:#f0fdf4;color:var(--good);}
+.rank-badge.bottom{background:#fef2f2;color:var(--bad);}
+.pct-up{color:var(--good);}
+.pct-down{color:var(--bad);}
+.pct-flat{color:var(--text-faint);}
+.bar-cell{display:flex;align-items:center;gap:8px;}
+.bar-track{flex:1;height:5px;background:var(--panel-2);border-radius:3px;overflow:hidden;min-width:50px;}
+.bar-fill{height:100%;background:var(--accent);border-radius:3px;}
+.table-scroll{max-height:460px;overflow-y:auto;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.table-scroll thead th{position:sticky;top:0;background:var(--panel);z-index:2;}
+
+/* ---------- Misc ---------- */
+.pill{
+  display:inline-block;padding:3px 9px;border-radius:20px;font-size:10.5px;font-weight:700;
+  background:var(--panel-2);border:1px solid var(--border);color:var(--text-dim);
+}
+.pill.type-svc{color:var(--accent);border-color:#dbe3ff;background:#eef1ff;}
+.pill.type-drop{color:var(--gold);border-color:#fbe8c6;background:#fff8ec;}
+.pill.good{color:var(--good);border-color:#bbf7d0;background:#f0fdf4;}
+.pill.warn{color:var(--warn);border-color:#fde68a;background:#fffbeb;}
+.pill.bad{color:var(--bad);border-color:#fecaca;background:#fef2f2;}
+.pill.flat{color:var(--text-dim);}
+.empty-state{padding:40px;text-align:center;color:var(--text-faint);font-size:12.5px;}
+.legend-row{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--text-dim);margin-top:8px;}
+.legend-dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;}
+
+/* AI Insights / commentary cards */
+.insight-card{
+  background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:17px 19px;margin-bottom:12px;
+  border-left:3px solid var(--accent);box-shadow:0 1px 2px rgba(20,30,60,.04);
+}
+.insight-card.warn{border-left-color:var(--bad);}
+.insight-card.good{border-left-color:var(--good);}
+.insight-card.neutral{border-left-color:var(--text-faint);}
+.insight-card .ihead{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.insight-card .icon{font-size:15px;}
+.insight-card .ititle{font-weight:700;font-size:13px;color:var(--text);}
+.insight-card p{margin:4px 0;color:var(--text-dim);font-size:12.5px;line-height:1.6;}
+.insight-card .action{
+  margin-top:9px;padding:9px 11px;background:var(--panel-2);border-radius:8px;font-size:12px;color:var(--text);
+}
+.insight-card .action b{color:var(--accent-2);}
+
+/* Hero card (dark gradient, for executive brief style) */
+.hero-card{
+  background:linear-gradient(135deg,#122452 0%, #0d1b3a 100%);border-radius:18px;padding:26px 28px;
+  color:#fff;margin-bottom:20px;
+}
+.hero-card .eyebrow{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#f5b942;font-weight:700;margin-bottom:8px;}
+.hero-card p{color:#c9d3ec;font-size:13px;line-height:1.6;margin:6px 0 0 0;}
+
+/* ---------- Live projection card (Targets tab) ---------- */
+.proj-card{
+  border-radius:18px;padding:24px 26px;margin-bottom:20px;color:#fff;
+  background:linear-gradient(135deg,#0d1b3a 0%, #122452 100%);
+}
+.proj-card.proj-good{background:linear-gradient(135deg,#0a3d2e 0%, #0f5c45 100%);}
+.proj-card.proj-warn{background:linear-gradient(135deg,#4a3208 0%, #6b481a 100%);}
+.proj-card.proj-bad{background:linear-gradient(135deg,#4a0f0f 0%, #6b1a1a 100%);}
+.proj-card .eyebrow{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#f5b942;font-weight:700;margin-bottom:10px;}
+.proj-card .proj-main{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-end;}
+.proj-card .proj-big{font-family:var(--font-display);font-size:34px;font-weight:700;line-height:1;}
+.proj-card .proj-big-label{font-size:11px;color:#c9d3ec;margin-top:6px;}
+.proj-card .proj-pill{display:inline-block;font-size:13px;font-weight:700;padding:4px 12px;border-radius:20px;background:rgba(255,255,255,.15);}
+.proj-card .proj-sub{font-size:12.5px;color:#dbe3f5;margin-top:14px;line-height:1.6;}
+.proj-card .proj-foot{font-size:10.5px;color:#9fb0d6;margin-top:10px;}
+
+.suggest-note{
+  font-size:12px;color:var(--text-dim);background:var(--panel-2);border:1px solid var(--border);
+  border-radius:10px;padding:12px 14px;margin-bottom:14px;line-height:1.55;
+}
+.suggest-note b{color:var(--text);}
+
+footer{text-align:center;color:var(--text-faint);font-size:11px;padding:30px 24px;}
+
+/* ---------- Mobile nav (hamburger + off-canvas sidebar) ---------- */
+#hamburger{
+  display:none;background:var(--panel);border:1px solid var(--border);border-radius:8px;
+  width:34px;height:34px;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto;
+  font-size:16px;color:var(--text-dim);
+}
+#theme-toggle{
+  background:var(--panel);border:1px solid var(--border);border-radius:8px;
+  width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
+  color:var(--text-dim);flex:0 0 auto;
+}
+#theme-toggle:hover{border-color:var(--accent);color:var(--accent);}
+#theme-toggle svg{width:15px;height:15px;}
+#cmdk-hint{
+  font-size:10.5px;color:var(--text-faint);border:1px solid var(--border);border-radius:6px;
+  padding:2px 6px;cursor:pointer;font-family:var(--font-mono);
+}
+#cmdk-hint:hover{border-color:var(--accent);color:var(--accent);}
+
+/* ---------- Command palette ---------- */
+#cmdk-overlay{
+  display:none;position:fixed;inset:0;background:rgba(10,15,30,.55);z-index:200;
+  align-items:flex-start;justify-content:center;padding-top:12vh;
+}
+#cmdk-overlay.open{display:flex;}
+#cmdk-box{
+  width:100%;max-width:520px;background:var(--panel);border-radius:14px;border:1px solid var(--border);
+  box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden;
+}
+#cmdk-input{
+  width:100%;box-sizing:border-box;padding:16px 18px;border:none;border-bottom:1px solid var(--border);
+  font-size:15px;background:var(--panel);color:var(--text);font-family:var(--font-body);outline:none;
+}
+#cmdk-results{max-height:340px;overflow-y:auto;padding:6px;}
+.cmdk-group-label{font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-faint);font-weight:700;padding:8px 10px 4px 10px;}
+.cmdk-item{padding:9px 10px;border-radius:8px;font-size:13px;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:8px;}
+.cmdk-item .cmdk-icon{color:var(--text-faint);font-size:12px;width:14px;}
+.cmdk-item.active{background:var(--panel-2);}
+.cmdk-item:hover{background:var(--panel-2);}
+#cmdk-empty{padding:24px;text-align:center;color:var(--text-faint);font-size:12.5px;}
+#sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(10,15,30,.5);z-index:60;}
+#sidebar-overlay.open{display:block;}
+
+/* ---------- Responsive breakpoints ---------- */
+@media(max-width:860px){
+  #sidebar{
+    position:fixed;left:0;top:0;height:100%;z-index:70;
+    transform:translateX(-100%);transition:transform .25s ease;box-shadow:2px 0 18px rgba(0,0,0,.25);
+  }
+  #sidebar.open{transform:translateX(0);}
+  #app-shell{display:block;}
+  #content-col{width:100%;}
+  #hamburger{display:flex;}
+  #topbar{padding:10px 14px;}
+  #topbar-row{gap:10px;}
+  #topbar .tb-meta{font-size:11.5px;}
+  #asof{display:none;}
+  #cmdk-hint{display:none;}
+  #breadcrumb{padding:8px 14px 0 14px;}
+  #filterbar{padding:12px 14px;gap:8px;}
+  .fchip{flex:1 1 calc(50% - 8px);min-width:0;height:42px;}
+  .fchip select,.fchip input[type=date]{width:100%;min-width:0;font-size:13.5px;}
+  .quick-filter-group{height:42px;}
+  #resetFilters,.btn-export{padding:0 12px;font-size:12.5px;}
+  #exportMenu{flex-wrap:wrap;width:100%;height:auto;}
+  #main{padding:16px 14px;}
+  .section-title{font-size:15.5px;margin:20px 0 10px 0;}
+  .kpi-grid{gap:10px;}
+  .kpi-grid .kpi{flex:1 1 150px;}
+  .kpi{padding:13px 14px;}
+  .kpi .value{font-size:20px;}
+  .panel{padding:14px 15px;}
+  table.data-table th,table.data-table td{padding:8px 9px;font-size:11.5px;}
+  .hero-card{padding:20px 18px;}
+}
+@media(max-width:480px){
+  .fchip{flex:1 1 100%;}
+  .kpi-grid .kpi{flex:1 1 calc(50% - 5px);}
+  #brand .brand-title{font-size:16px;}
+}
+
+/* Print */
+@media print{
+  #sidebar,#topbar,#filterbar,#breadcrumb,.no-print{display:none !important;}
+  body{background:#fff;color:#000;}
+  .view{display:block !important;}
+  .panel,.kpi{border:1px solid #ccc;background:#fff;break-inside:avoid;}
+  #app-shell{display:block;}
+}
+#loadOverlay{position:fixed;inset:0;background:var(--bg);z-index:999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;}
+#loadOverlay .spin{width:34px;height:34px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+
+</head>
+<body>
+
+<div id="loadOverlay"><div class="spin"></div><div style="color:var(--text-dim);font-size:12px;">Loading service dashboard…</div></div>
+
+<div id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<div id="cmdk-overlay" onclick="if(event.target===this) closeCmdk()">
+  <div id="cmdk-box">
+    <input id="cmdk-input" type="text" placeholder="Jump to a view or centre…" autocomplete="off" oninput="renderCmdkResults(this.value)">
+    <div id="cmdk-results"></div>
+  </div>
+</div>
+
+<div id="app-shell">
+  <aside id="sidebar">
+    <div id="brand">
+      <div class="brand-title">Aptronix Service</div>
+      <div class="brand-sub">Executive Dashboard</div>
+    </div>
+    <div id="tabbar"></div>
+    <div id="sidebar-footnote">Apple Premium Partner · Apple Authorised Service Provider. All values in ₹ unless specified.</div>
+  </aside>
+  <div id="content-col">
+    <div id="topbar">
+      <div id="topbar-row">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div id="hamburger" onclick="toggleSidebar()">☰</div>
+          <div class="tb-meta" id="tb-coverage-line"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;">
+          <span id="tb-validation" class="validation-pill"><span class="dot"></span><span id="tb-validation-text">Validated</span></span>
+          <span id="cmdk-hint" onclick="openCmdk()">⌘K</span>
+          <div id="theme-toggle" onclick="toggleTheme()"><i data-lucide="moon"></i></div>
+          <span id="asof"></span>
+        </div>
+      </div>
+    </div>
+
+    <div id="breadcrumb"></div>
+
+    <div id="filterbar"></div>
+
+    <div id="main">
+      <div id="views"></div>
+    </div>
+
+    <footer>Aptronix Service Dashboard · Data through the latest uploaded month · Built for internal management review</footer>
+  </div>
+</div>
+
+
+<script>/* ============================================================
+   Aptronix Service — Executive Dashboard
+   Client-side data layer + rendering. No external calls.
+   ============================================================ */
+async function __boot(RAW){
+'use strict';
+const MONTHS = RAW.months;                  // [{MonthKey,MonthLabel,FY,Quarter,FYQ}]
+const CENTRES = RAW.centres;                // [{Centre,State,ARM,LocationType,City}]
+const FACT_MONTH = RAW.fact_month;          // [mk,centre,revenue,gp,txns]
+const FACT_BU = RAW.fact_bu;                // [mk,centre,bu,revenue,gp,txns]
+const FACT_CAT = RAW.fact_cat;              // [mk,centre,category,revenue,gp,txns]
+const FACT_PF = RAW.fact_pf;                // [mk,centre,pf,revenue,gp,txns]
+const FACT_ITEM = RAW.fact_item;            // [mk,centre,item,revenue,gp,txns]
+const FACT_TXNTYPE = RAW.fact_txntype;      // [mk,centre,type,revenue,gp,txns]
+const FACT_EXEC = RAW.fact_exec;            // [centre,exec,revenue,gp,txns]
+const FACT_DAY = RAW.fact_day;              // [dateStr,centre,revenue,gp,txns] — exact-day precision
+const CSAT = RAW.csat;                      // [mk,centre,value]
+const TARGET_REVENUE = RAW.target_revenue || []; // [mk,centre,value]
+const TARGET_GP = RAW.target_gp || [];
+const TARGET_CSAT = RAW.target_csat || [];
+const TARGET_LICENSES = RAW.target_licenses || []; // [mk,centre,count] — a unit count, not currency
+const GP_INCENTIVE = RAW.gp_incentives || []; // [mk,centre,amount] — additive, already folded into fact_month/fact_day GP
+const GP_COVERED_MONTHS = new Set(RAW.gpCoveredMonths || []); // months whose GP includes Spare Parts Incentives
+
+const MONTH_MAP = {}; MONTHS.forEach(m=>MONTH_MAP[m.MonthKey]=m);
+const CENTRE_MAP = {}; CENTRES.forEach(c=>CENTRE_MAP[c.Centre]=c);
+const MIN_MK = Math.min(...MONTHS.map(m=>m.MonthKey));
+const MAX_MK = Math.max(...MONTHS.map(m=>m.MonthKey));
+const MIN_DATE = FACT_DAY.reduce((m,r)=>r[0]<m?r[0]:m, FACT_DAY[0][0]);
+const MAX_DATE = FACT_DAY.reduce((m,r)=>r[0]>m?r[0]:m, FACT_DAY[0][0]);
+const CSAT_MAP = {}; // mk|centre -> value
+CSAT.forEach(([mk,c,v])=>{CSAT_MAP[mk+'|'+c]=v;});
+
+const FYS = [...new Set(MONTHS.map(m=>m.FY))].sort();
+const STATES = [...new Set(CENTRES.map(c=>c.State))].sort();
+const ARMS = [...new Set(CENTRES.map(c=>c.ARM))].sort();
+const BUS = [...new Set(FACT_BU.map(r=>r[2]))].sort();
+const CATS = [...new Set(FACT_CAT.map(r=>r[2]))].sort();
+const LOC_TYPES = [...new Set(CENTRES.map(c=>c.LocationType))].sort();
+const TXN_TYPES = [...new Set(FACT_TXNTYPE.map(r=>r[2]))].sort();
+
+const fmtINR = (n)=>{
+  if(n===null || n===undefined || Number.isNaN(n)) return '—';
+  const sign = n<0?'-':'';
+  n = Math.abs(n);
+  if(n>=1e7) return sign+'₹'+(n/1e7).toFixed(2)+'Cr';
+  if(n>=1e5) return sign+'₹'+(n/1e5).toFixed(2)+'L';
+  if(n>=1e3) return sign+'₹'+(n/1e3).toFixed(1)+'K';
+  return sign+'₹'+n.toFixed(0);
+};
+const fmtNum = (n)=> (n===null||n===undefined||Number.isNaN(n)) ? '—' : n.toLocaleString('en-IN',{maximumFractionDigits:0});
+const fmtPct = (n)=> (n===null||n===undefined||Number.isNaN(n)) ? '—' : (n>=0?'+':'')+n.toFixed(1)+'%';
+const monthLabel = (mk)=> MONTH_MAP[mk]?MONTH_MAP[mk].MonthLabel:mk;
+// null/undefined propagate (a GP-stripped bundle has GP=null, so any ratio
+// built from it — GP%, MoM, etc. — should also come out null and render as
+// "—", not a misleading 0 or 0%.
+const safeDiv = (a,b)=> (a===null||a===undefined||b===null||b===undefined) ? null : (b===0?0:a/b);
+const dateToMonthKey = (dateStr)=>{ const [y,m] = dateStr.split('-'); return parseInt(y)*100+parseInt(m); };
+// Set per-bundle by build_access_bundles.py (default true — the plain
+// single-file build via build_data.py always shows GP). Controls whether
+// the Gross Profit tab and the GP-specific KPI cards on other tabs render
+// at all; GP being null anywhere else already renders as "—" regardless.
+const GP_VISIBLE = RAW.gpVisible !== false;
+
+/* ------------------------------------------------------------
+   Global filter state + drill path
+   ------------------------------------------------------------ */
+const state = {
+  fy:'All', quarter:'All', dateFrom:MIN_DATE, dateTo:MAX_DATE,
+  state:'All', arm:'All', centre:'All', bu:'All', category:'All', locType:'All',
+};
+let drillPath = [];
+
+function resetFilters(){
+  state.fy='All'; state.quarter='All'; state.dateFrom=MIN_DATE; state.dateTo=MAX_DATE;
+  state.state='All'; state.arm='All'; state.centre='All'; state.bu='All'; state.category='All'; state.locType='All';
+  drillPath=[];
+  syncFilterUI();
+  renderAll();
+  syncURL();
+}
+
+/* ------------------------------------------------------------
+   Shareable URL state — filters + active tab are encoded into the
+   location hash so a filtered view can be copied/sent/refreshed
+   without losing context. Best-effort: any parse failure just
+   falls back to defaults silently.
+   ------------------------------------------------------------ */
+function syncURL(){
+  try{
+    const payload = {t:activeTab, s:state};
+    history.replaceState(null,'','#'+encodeURIComponent(JSON.stringify(payload)));
+  }catch(e){ /* non-fatal */ }
+}
+function restoreFromURL(){
+  if(!location.hash || location.hash.length<2) return;
+  try{
+    const payload = JSON.parse(decodeURIComponent(location.hash.slice(1)));
+    const visibleTabIds = new Set(GROUPS.flatMap(g=>g.ids));
+    if(payload.t && TAB_MAP[payload.t] && visibleTabIds.has(payload.t)) activeTab = payload.t;
+    if(payload.s && typeof payload.s==='object'){
+      Object.keys(state).forEach(k=>{
+        if(payload.s[k]!==undefined) state[k]=payload.s[k];
+      });
+    }
+    // make sure the restored tab's sidebar group is expanded
+    const grp = GROUPS.find(g=>g.ids.includes(activeTab));
+    if(grp) openGroups.add(grp.label);
+  }catch(e){ /* malformed hash — ignore, keep defaults */ }
+}
+
+/* Month bounds derived from the (possibly custom) date range — used to
+   filter every month-grain fact table consistently. */
+function currentMonthBounds(){
+  return {mFrom: dateToMonthKey(state.dateFrom), mTo: dateToMonthKey(state.dateTo)};
+}
+
+function monthInRange(mk){
+  const {mFrom,mTo} = currentMonthBounds();
+  if(mk<mFrom || mk>mTo) return false;
+  if(state.fy!=='All' && MONTH_MAP[mk].FY!==state.fy) return false;
+  if(state.quarter!=='All' && MONTH_MAP[mk].Quarter!==state.quarter) return false;
+  return true;
+}
+function centreMatches(c){
+  const meta = CENTRE_MAP[c];
+  if(!meta) return false;
+  if(state.state!=='All' && meta.State!==state.state) return false;
+  if(state.arm!=='All' && meta.ARM!==state.arm) return false;
+  if(state.centre!=='All' && c!==state.centre) return false;
+  if(state.locType!=='All' && meta.LocationType!==state.locType) return false;
+  return true;
+}
+
+/* Filtered centre-month rows, joined with centre meta */
+function getFilteredMonthRows(){
+  const out=[];
+  for(const [mk,c,rev,gp,txns] of FACT_MONTH){
+    if(!monthInRange(mk)) continue;
+    if(!centreMatches(c)) continue;
+    out.push({mk,centre:c,revenue:rev,gp,txns,meta:CENTRE_MAP[c]});
+  }
+  return out;
+}
+function getFilteredLicenseRows(){
+  // Deliberately ignores state.bu (a filter meant for the Business Units
+  // tab) — this always means Licenses specifically, so a BU filter set
+  // elsewhere can't accidentally hide license data here.
+  const out=[];
+  for(const [mk,c,bu,rev,gp,txns] of FACT_BU){
+    if(bu!=='Licenses') continue;
+    if(!monthInRange(mk)) continue;
+    if(!centreMatches(c)) continue;
+    out.push({mk,centre:c,revenue:rev,gp,txns});
+  }
+  return out;
+}
+function getFilteredBURows(){
+  const out=[];
+  for(const [mk,c,bu,rev,gp,txns] of FACT_BU){
+    if(!monthInRange(mk)) continue;
+    if(!centreMatches(c)) continue;
+    if(state.bu!=='All' && bu!==state.bu) continue;
+    out.push({mk,centre:c,bu,revenue:rev,gp,txns});
+  }
+  return out;
+}
+function getFilteredCatRows(){
+  const out=[];
+  for(const [mk,c,cat,rev,gp,txns] of FACT_CAT){
+    if(!monthInRange(mk)) continue;
+    if(!centreMatches(c)) continue;
+    if(state.category!=='All' && cat!==state.category) continue;
+    out.push({mk,centre:c,category:cat,revenue:rev,gp,txns});
+  }
+  return out;
+}
+function getFilteredPFRows(){
+  const out=[];
+  for(const [mk,c,pf,rev,gp,txns] of FACT_PF){
+    if(!monthInRange(mk)) continue;
+    if(!centreMatches(c)) continue;
+    out.push({mk,centre:c,pf,revenue:rev,gp,txns});
+  }
+  return out;
+}
+function getFilteredItemRows(){
+  const out=[];
+  for(const [mk,c,item,rev,gp,txns] of FACT_ITEM){
+    if(!monthInRange(mk)) continue;
+    if(!centreMatches(c)) continue;
+    out.push({mk,centre:c,item,revenue:rev,gp,txns});
+  }
+  return out;
+}
+function getFilteredTxnTypeRows(){
+  const out=[];
+  for(const [mk,c,tt,rev,gp,txns] of FACT_TXNTYPE){
+    if(!monthInRange(mk)) continue;
+    if(!centreMatches(c)) continue;
+    out.push({mk,centre:c,type:tt,revenue:rev,gp,txns});
+  }
+  return out;
+}
+function getFilteredExecRows(){
+  // exec table is all-time (no month) — approximate by scaling not needed; just filter by centre match
+  const out=[];
+  for(const [c,ex,rev,gp,txns] of FACT_EXEC){
+    if(!centreMatches(c)) continue;
+    out.push({centre:c,exec:ex,revenue:rev,gp,txns});
+  }
+  return out;
+}
+function getFilteredCSAT(){
+  const out=[];
+  for(const [mk,c,v] of CSAT){
+    if(!monthInRange(mk)) continue;
+    if(!centreMatches(c)) continue;
+    out.push({mk,centre:c,value:v});
+  }
+  return out;
+}
+/* ------------------------------------------------------------
+   Working-day-aware month projection + seasonally-informed target
+   suggestions — service centres are closed Sundays, so every "days
+   elapsed" / "days in month" calculation here counts Mon-Sat only.
+   ------------------------------------------------------------ */
+function mkToLabel(mk){
+  const y = Math.floor(mk/100), m = mk%100;
+  const names=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return names[m-1]+' '+String(y).slice(2);
+}
+function nextMonthKey(mk){ const y=Math.floor(mk/100), m=mk%100; return m===12?(y+1)*100+1:y*100+(m+1); }
+function prevMonthKey(mk){ const y=Math.floor(mk/100), m=mk%100; return m===1?(y-1)*100+12:y*100+(m-1); }
+/* ------------------------------------------------------------
+   "Is this month still in progress" — the single source of truth
+   used everywhere a MoM/QoQ/YoY comparison, a ranking input, or a
+   forecast could otherwise be corrupted by comparing a partial month
+   (e.g. 4 days of September) against a full prior month. Always based
+   on the real device date, matching the Live Projection card's
+   convention, not whatever period happens to be filtered on screen.
+   ------------------------------------------------------------ */
+function isCurrentRealMonth(mk){
+  const now = new Date();
+  return mk === now.getFullYear()*100 + (now.getMonth()+1);
+}
+function completeMonthsOnly(series){
+  return series.filter(r=>!isCurrentRealMonth(r.mk));
+}
+function lastCompleteRow(series){
+  for(let i=series.length-1;i>=0;i--){ if(!isCurrentRealMonth(series[i].mk)) return series[i]; }
+  return null;
+}
+function daysInMonth(mk){ const y=Math.floor(mk/100), m=mk%100; return new Date(y,m,0).getDate(); }function workingDaysInMonth(mk){
+  const y=Math.floor(mk/100), m=mk%100, total=daysInMonth(mk);
+  let wd=0;
+  for(let d=1; d<=total; d++){ if(new Date(y,m-1,d).getDay()!==0) wd++; }
+  return wd;
+}
+function workingDaysElapsed(mk, uptoDay){
+  const y=Math.floor(mk/100), m=mk%100;
+  let wd=0;
+  for(let d=1; d<=uptoDay; d++){ if(new Date(y,m-1,d).getDay()!==0) wd++; }
+  return wd;
+}
+function toDateStr(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function mostRecentMonday(d){
+  const day = d.getDay(); // 0=Sun..6=Sat
+  const diff = day===0 ? 6 : day-1; // days back to Monday
+  const monday = new Date(d);
+  monday.setDate(d.getDate()-diff);
+  return monday;
+}
+/* Today / WTD / MTD quick filters — set the custom date range to a
+   preset window ending today, same mechanism as picking dates by hand,
+   so every existing view (KPIs, tables, charts) picks it up automatically
+   with no separate code path. WTD starts Monday (centres are closed
+   Sundays, so the week's first working day is Monday), MTD starts the
+   1st of the current calendar month. Both use the REAL device date, not
+   whatever period is currently filtered elsewhere. */
+function applyQuickFilter(kind){
+  const now = new Date();
+  const todayStr = toDateStr(now);
+  let fromStr;
+  if(kind==='today') fromStr = todayStr;
+  else if(kind==='wtd') fromStr = toDateStr(mostRecentMonday(now));
+  else fromStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+  state.fy='All'; state.quarter='All';
+  state.dateFrom = clampToDataRange(fromStr);
+  state.dateTo = clampToDataRange(todayStr);
+  onFilterChange();
+}
+/* Target lookups that ignore the user's date-range filter (a live "today"
+   projection, or a suggestion for an upcoming month, needs to work
+   regardless of whatever historical period someone happens to have
+   selected on screen) but still respect centre/ARM/state filters, so an
+   Area Manager or Centre Manager only ever sees their own scope. */
+function getTargetForMonth(arr, mk){
+  let sum=0;
+  for(const [tmk,c,v] of arr){ if(tmk===mk && centreMatches(c)) sum+=v; }
+  return sum;
+}
+function getTargetForMonthCentre(arr, mk, centre){
+  for(const [tmk,c,v] of arr){ if(tmk===mk && c===centre) return v; }
+  return null;
+}
+
+function computeLiveProjection(){
+  const now = new Date();
+  const y=now.getFullYear(), m=now.getMonth()+1, d=now.getDate();
+  const mk = y*100+m;
+  const totalWD = workingDaysInMonth(mk);
+  const elapsedWD = workingDaysElapsed(mk, d);
+  const monthPrefix = `${y}-${String(m).padStart(2,'0')}`;
+  const todayStr = `${monthPrefix}-${String(d).padStart(2,'0')}`;
+
+  let revenueSoFar = 0, anyDataThisMonth = false;
+  for(const [ds,c,rev] of FACT_DAY){
+    if(!ds.startsWith(monthPrefix)) continue;
+    if(!centreMatches(c)) continue;
+    anyDataThisMonth = true;
+    if(ds<=todayStr) revenueSoFar += rev;
+  }
+  if(!anyDataThisMonth) return {noData:true, mk};
+
+  const target = getTargetForMonth(TARGET_REVENUE, mk);
+  const dailyRate = elapsedWD>0 ? revenueSoFar/elapsedWD : 0;
+  const projected = dailyRate * totalWD;
+  const expectedToDate = (target>0 && totalWD>0) ? target*(elapsedWD/totalWD) : null;
+  const paceVsExpected = (expectedToDate!==null && expectedToDate>0) ? safeDiv(revenueSoFar-expectedToDate, expectedToDate)*100 : null;
+  const projectedAchPct = target>0 ? safeDiv(projected,target)*100 : null;
+
+  return {noData:false, mk, totalWD, elapsedWD, revenueSoFar, target, projected, expectedToDate, paceVsExpected, projectedAchPct};
+}
+
+/* ------------------------------------------------------------
+   Seasonal decomposition for target suggestions.
+
+   Sanity-checked against the full history (see conversation / README):
+   consistent-panel data shows Oct/Aug/Nov/Jul running meaningfully above
+   average and Feb/Mar/Sep below — notably, September dips rather than
+   peaking despite being deep in monsoon season, so "monsoon = high" isn't
+   quite right; the real lean season is Feb-Mar. The model below is
+   computed dynamically from whatever data exists at build time, so this
+   picture refines itself automatically as more months come in — nothing
+   here is a hardcoded assumption from one point-in-time analysis.
+   ------------------------------------------------------------ */
+function getConsistentCentreSet(){
+  // Centres present in every month currently in the dataset, AND flagged
+  // as a full "Service Centre" (not a Repair Drop Off Location) in
+  // Location Master. Newly opened full centres would otherwise make
+  // revenue look "seasonally" higher just because there are more
+  // centres, not more demand per centre — and drop-off points run at
+  // such low, sporadic volume (often near-zero some months) that their
+  // month-to-month swings are noise, not seasonality, and would dilute
+  // a genuine footfall signal if mixed in. This isolates seasonality to
+  // the centres actually generating meaningful, comparable revenue.
+  const monthsByCentre = {};
+  const allMonths = new Set(FACT_MONTH.map(r=>r[0]));
+  FACT_MONTH.forEach(([mk,c])=>{ (monthsByCentre[c]=monthsByCentre[c]||new Set()).add(mk); });
+  return new Set(Object.keys(monthsByCentre).filter(c=>{
+    if(monthsByCentre[c].size!==allMonths.size) return false;
+    const meta = CENTRE_MAP[c];
+    return meta && meta.LocationType==='Service Centre';
+  }));
+}
+
+function computeSeasonalIndex(){
+  // 1.00 = an average month. Built only from COMPLETE fiscal years (12
+  // months each) so a partial current year can't skew any one month's
+  // index, and only from the consistent centre panel above.
+  const consistent = getConsistentCentreSet();
+  const monthly = {};
+  FACT_MONTH.forEach(([mk,c,rev])=>{ if(consistent.has(c)) monthly[mk]=(monthly[mk]||0)+rev; });
+
+  const byFY = {};
+  Object.keys(monthly).map(Number).forEach(mk=>{
+    const y=Math.floor(mk/100), m=mk%100, fyStart = m>=4?y:y-1;
+    (byFY[fyStart]=byFY[fyStart]||{})[mk]=monthly[mk];
+  });
+  const fullFYs = Object.keys(byFY).filter(fy=>Object.keys(byFY[fy]).length===12);
+
+  const ratiosByCalMonth = {};
+  fullFYs.forEach(fy=>{
+    const vals = byFY[fy];
+    const avg = Object.values(vals).reduce((a,b)=>a+b,0)/12;
+    Object.entries(vals).forEach(([mk,rev])=>{
+      const cm = Number(mk)%100;
+      (ratiosByCalMonth[cm]=ratiosByCalMonth[cm]||[]).push(rev/avg);
+    });
+  });
+  const index = {}, sampleYears = {};
+  for(let cm=1; cm<=12; cm++){
+    const rs = ratiosByCalMonth[cm];
+    index[cm] = rs && rs.length ? rs.reduce((a,b)=>a+b,0)/rs.length : 1.0;
+    sampleYears[cm] = rs ? rs.length : 0;
+  }
+  return {index, sampleYears, fullFYCount: fullFYs.length};
+}
+
+function computeSuggestedTargets(){
+  if(FACT_MONTH.length===0) return {targetMonth:null, rows:[], lowVolumeRows:[]};
+  const maxMk = FACT_MONTH.reduce((mx,r)=>r[0]>mx?r[0]:mx, FACT_MONTH[0][0]);
+  const targetMonth = nextMonthKey(maxMk);
+  const last3 = [prevMonthKey(prevMonthKey(maxMk)), prevMonthKey(maxMk), maxMk];
+  const {index: seasonalIndex, sampleYears, fullFYCount} = computeSeasonalIndex();
+  const targetCM = targetMonth % 100;
+  const idxTarget = seasonalIndex[targetCM] || 1;
+
+  // A centre is treated as "low volume" (drop-off point, or a genuinely
+  // new/nascent location) rather than run through the full seasonality +
+  // growth model if it's not a full Service Centre, or simply hasn't
+  // built up enough history yet — at that volume, month-to-month swings
+  // are noise, not signal, and dressing them up with the same model as
+  // an established centre would be actively misleading.
+  const LOW_VOLUME_MIN_MONTHS = 6;
+  const centresInScope = CENTRES.filter(c=>centreMatches(c.Centre));
+
+  const rows = [], lowVolumeRows = [];
+  for(const {Centre:centre, LocationType} of centresInScope){
+    const byMk = {};
+    FACT_MONTH.forEach(([mk,c,rev])=>{ if(c===centre) byMk[mk]=rev; });
+    const monthsWithData = Object.keys(byMk).length;
+    const isLowVolume = LocationType!=='Service Centre' || monthsWithData<LOW_VOLUME_MIN_MONTHS;
+    const existingTarget = getTargetForMonthCentre(TARGET_REVENUE, targetMonth, centre);
+
+    if(isLowVolume){
+      // Simple trailing average only — no seasonality or growth
+      // extrapolation applied, since neither is reliable at this volume.
+      const recentVals = last3.map(mk=>byMk[mk]).filter(v=>v!==undefined);
+      const simpleAvg = recentVals.length? recentVals.reduce((a,b)=>a+b,0)/recentVals.length : null;
+      lowVolumeRows.push({centre, locationType:LocationType, monthsWithData, simpleAvg, existingTarget});
+      continue;
+    }
+
+    let deseasoned=[];
+    for(const mk of last3){
+      const rev=byMk[mk];
+      if(rev===undefined) continue;
+      const idx = seasonalIndex[mk%100] || 1;
+      deseasoned.push(rev/idx);
+    }
+    const trendBase = deseasoned.length? deseasoned.reduce((a,b)=>a+b,0)/deseasoned.length : null;
+
+    let yoyGrowths=[];
+    for(const mk of last3){
+      const cur=byMk[mk], prevYr=byMk[mk-100];
+      if(prevYr>0 && cur!==undefined) yoyGrowths.push((cur-prevYr)/prevYr);
+    }
+    const avgYoY = yoyGrowths.length? yoyGrowths.reduce((a,b)=>a+b,0)/yoyGrowths.length : 0;
+    const dampedGrowth = Math.max(-0.4, Math.min(0.6, avgYoY*0.5));
+
+    const suggested = trendBase!==null ? trendBase*idxTarget*(1+dampedGrowth) : null;
+    rows.push({centre, trendBase, dampedGrowth, suggested, existingTarget});
+  }
+  rows.sort((a,b)=>(b.suggested||0)-(a.suggested||0));
+  lowVolumeRows.sort((a,b)=>(b.simpleAvg||0)-(a.simpleAvg||0));
+  return {targetMonth, seasonalIndex, sampleYears, fullFYCount, idxTarget, rows, lowVolumeRows};
+}
+
+function getFilteredTarget(arr){
+  const out=[];
+  for(const [mk,c,v] of arr){
+    if(!monthInRange(mk)) continue;
+    if(!centreMatches(c)) continue;
+    out.push({mk,centre:c,value:v});
+  }
+  return out;
+}
+function hasAnyTargets(){ return TARGET_REVENUE.length>0 || TARGET_GP.length>0 || TARGET_CSAT.length>0 || TARGET_LICENSES.length>0; }
+
+/* Exact-day-precision totals for the selected custom date range (used for
+   headline KPI cards — precise even when the range doesn't align to full
+   months). Trend charts and dimensional breakdowns remain month-grain. */
+function getExactRangeTotals(){
+  let revenue=0, gp=0, txns=0;
+  for(const [d,c,rev,gp_,tx] of FACT_DAY){
+    if(d<state.dateFrom || d>state.dateTo) continue;
+    if(!centreMatches(c)) continue;
+    revenue+=rev; gp+=gp_; txns+=tx;
+  }
+  const gpIncentive = incentiveTotalForExactRange();
+  const gpRepair = round2(gp - gpIncentive);
+  return {revenue, gp, txns, gpPct:safeDiv(gp,revenue)*100, ats:safeDiv(revenue,txns), gpIncentive, gpRepair};
+}
+function getExactPreviousRangeTotals(){
+  const from = new Date(state.dateFrom), to = new Date(state.dateTo);
+  const spanDays = Math.round((to-from)/86400000)+1;
+  const prevTo = new Date(from); prevTo.setDate(prevTo.getDate()-1);
+  const prevFrom = new Date(prevTo); prevFrom.setDate(prevFrom.getDate()-(spanDays-1));
+  const toStr = (d)=>d.toISOString().slice(0,10);
+  const pf = toStr(prevFrom), pt = toStr(prevTo);
+  if(pt < MIN_DATE) return null;
+  let revenue=0, gp=0, txns=0;
+  for(const [d,c,rev,gp_,tx] of FACT_DAY){
+    if(d<pf || d>pt) continue;
+    if(!centreMatches(c)) continue;
+    revenue+=rev; gp+=gp_; txns+=tx;
+  }
+  return {revenue, gp, txns, gpPct:safeDiv(gp,revenue)*100, ats:safeDiv(revenue,txns)};
+}
+/* Whether every month touched by the current filter has Spare Parts
+   Incentives coverage, partial coverage, or none — drives the caveat
+   banner on Executive/GP/Growth views. */
+function gpCoverageStatus(){
+  const {mFrom,mTo} = currentMonthBounds();
+  const touched = MONTHS.filter(m=>m.MonthKey>=mFrom && m.MonthKey<=mTo).map(m=>m.MonthKey);
+  if(!touched.length) return 'none';
+  const coveredCount = touched.filter(mk=>GP_COVERED_MONTHS.has(mk)).length;
+  if(coveredCount===touched.length) return 'full';
+  if(coveredCount===0) return 'none';
+  return 'partial';
+}
+
+function sumRows(rows){
+  let revenue=0,gp=0,txns=0;
+  for(const r of rows){revenue+=r.revenue;gp+=r.gp;txns+=r.txns;}
+  return {revenue,gp,txns,gpPct:safeDiv(gp,revenue)*100,ats:safeDiv(revenue,txns)};
+}
+
+function groupSum(rows, keyFn){
+  const map = new Map();
+  for(const r of rows){
+    const k = keyFn(r);
+    if(!map.has(k)) map.set(k,{revenue:0,gp:0,txns:0});
+    const o = map.get(k);
+    o.revenue+=r.revenue; o.gp+=r.gp; o.txns+=r.txns;
+  }
+  return map;
+}
+
+/* time series at monthly grain for currently filtered scope */
+function monthlySeries(){
+  const rows = getFilteredMonthRows();
+  const map = groupSum(rows, r=>r.mk);
+  const incByMk = incentiveTotalByMonth();
+  const mks = [...map.keys()].sort((a,b)=>a-b);
+  return mks.map(mk=>{
+    const v = map.get(mk);
+    const gpIncentive = round2(incByMk[mk]||0);
+    return {mk, label:monthLabel(mk), ...v, gpPct:safeDiv(v.gp,v.revenue)*100,
+            gpIncentive, gpRepair: round2(v.gp - gpIncentive)};
+  });
+}
+
+/* growth calcs */
+function withMoM(series){
+  return series.map((r,i)=>{
+    const prev = series[i-1];
+    // A partial in-progress month has no fair comparison to a full prior
+    // month — 4 days of September vs all of August isn't a -84% decline,
+    // it's an apples-to-oranges number. Leave it null rather than show
+    // something misleading; the Live Projection card is the right place
+    // to see how the in-progress month is pacing.
+    const mom = (prev && !isCurrentRealMonth(r.mk)) ? safeDiv(r.revenue-prev.revenue, prev.revenue)*100 : null;
+    return {...r, mom};
+  });
+}
+function withYoY(series){
+  const byMk = {}; series.forEach(r=>byMk[r.mk]=r);
+  return series.map(r=>{
+    const py = r.mk-100;
+    const prev = byMk[py];
+    const yoy = (prev && !isCurrentRealMonth(r.mk)) ? safeDiv(r.revenue-prev.revenue, prev.revenue)*100 : null;
+    return {...r, yoy};
+  });
+}
+function runningTotals(series){
+  let rt=0, rgp=0;
+  return series.map(r=>{rt+=r.revenue; rgp+=r.gp; return {...r, running:rt, runningGP:rgp};});
+}
+function rolling3(series){
+  return series.map((r,i)=>{
+    const win = series.slice(Math.max(0,i-2), i+1);
+    const avg = win.reduce((s,x)=>s+x.revenue,0)/win.length;
+    return {...r, rolling3:avg};
+  });
+}
+function quarterlySeries(){
+  const rows = getFilteredMonthRows();
+  const map = new Map();
+  for(const r of rows){
+    const m = MONTH_MAP[r.mk];
+    const key = m.FYQ;
+    if(!map.has(key)) map.set(key,{revenue:0,gp:0,txns:0,order:m.FY+'-'+m.Quarter, sortKey: r.mk});
+    const o = map.get(key);
+    o.revenue+=r.revenue; o.gp+=r.gp; o.txns+=r.txns; o.sortKey=Math.min(o.sortKey,r.mk);
+  }
+  return [...map.entries()].map(([label,v])=>({label,...v})).sort((a,b)=>a.sortKey-b.sortKey);
+}
+
+/* ------------------------------------------------------------
+   Rankings
+   ------------------------------------------------------------ */
+function rankBy(rows, keyFn, metaFn){
+  const map = groupSum(rows, keyFn);
+  const arr = [...map.entries()].map(([k,v])=>({
+    key:k, ...v, gpPct:safeDiv(v.gp,v.revenue)*100, ats:safeDiv(v.revenue,v.txns),
+    ...(metaFn?metaFn(k):{})
+  }));
+  arr.sort((a,b)=>b.revenue-a.revenue);
+  arr.forEach((r,i)=>r.rank=i+1);
+  return arr;
+}
+function centreRanking(){
+  const rows = getFilteredMonthRows();
+  return rankBy(rows, r=>r.centre, k=>({name:k, state:CENTRE_MAP[k]?.State, arm:CENTRE_MAP[k]?.ARM, type:CENTRE_MAP[k]?.LocationType}));
+}
+function stateRanking(){
+  const rows = getFilteredMonthRows();
+  return rankBy(rows, r=>r.meta.State, k=>({name:k}));
+}
+function armRanking(){
+  const rows = getFilteredMonthRows();
+  return rankBy(rows, r=>r.meta.ARM, k=>({name:k, state:CENTRES.find(c=>c.ARM===k)?.State}));
+}
+
+/* previous-period comparison (for MoM-style deltas on KPI cards) */
+function previousPeriodRange(){
+  const {mFrom,mTo} = currentMonthBounds();
+  const monthsInRange = MONTHS.filter(m=>m.MonthKey>=mFrom && m.MonthKey<=mTo).map(m=>m.MonthKey).sort((a,b)=>a-b);
+  const n = monthsInRange.length;
+  const allMk = MONTHS.map(m=>m.MonthKey).sort((a,b)=>a-b);
+  const idxFrom = allMk.indexOf(mFrom);
+  const prevEndIdx = idxFrom-1;
+  if(prevEndIdx<0) return null;
+  const prevStartIdx = Math.max(0, prevEndIdx-n+1);
+  return {from:allMk[prevStartIdx], to:allMk[prevEndIdx]};
+}
+function sumForRange(from,to){
+  const rows=[];
+  for(const [mk,c,rev,gp,txns] of FACT_MONTH){
+    if(mk<from||mk>to) continue;
+    if(!centreMatches(c)) continue;
+    rows.push({revenue:rev,gp,txns});
+  }
+  return sumRows(rows);
+}
+
+/* GP composition: Repair GP (transaction-derived) vs Spare Parts
+   Incentives. GP_INCENTIVE amounts are additive and already folded into
+   FACT_MONTH/FACT_DAY's GP by build_data.py — Repair GP is simply the
+   remainder, never re-derived from a separate source, so the two always
+   sum exactly to the headline "Total GP" everywhere else on the
+   dashboard. */
+function incentiveTotalByMonth(){
+  const map = {};
+  for(const [mk,c,amt] of GP_INCENTIVE){
+    if(!centreMatches(c)) continue;
+    map[mk] = (map[mk]||0) + amt;
+  }
+  return map;
+}
+function incentiveTotalForExactRange(){
+  // Incentives are posted against a centre/month with no day-level detail
+  // (see build_data.py) — attributed to day 1 of the month there, so the
+  // same convention is used here: a month's incentive counts toward an
+  // exact date range if that range includes the 1st of the month.
+  let total = 0;
+  for(const [mk,c,amt] of GP_INCENTIVE){
+    if(!centreMatches(c)) continue;
+    const firstDay = `${Math.floor(mk/100)}-${String(mk%100).padStart(2,'0')}-01`;
+    if(firstDay < state.dateFrom || firstDay > state.dateTo) continue;
+    total += amt;
+  }
+  return round2(total);
+}
+function round2(v){ return Math.round(v*100)/100; }
+
+/* ================================================================
+   UI: Filter bar, tabs, breadcrumb
+   ================================================================ */
+const TABS = [
+  {id:'exec', label:'Executive Overview', icon:'⌂', lucide:'layout-dashboard'},
+  {id:'revenue', label:'Revenue', icon:'▤', lucide:'indian-rupee'},
+  {id:'gp', label:'Gross Profit', icon:'◈', lucide:'percent'},
+  {id:'csat', label:'CSAT', icon:'☺', lucide:'smile'},
+  {id:'licenses', label:'Licenses', icon:'▣', lucide:'shield-check'},
+  {id:'targets', label:'Targets', icon:'◉', lucide:'target'},
+  {id:'centre', label:'Centres', icon:'▦', lucide:'building-2'},
+  {id:'centreexplorer', label:'Centre Explorer', icon:'⌕', lucide:'search'},
+  {id:'stateperf', label:'States', icon:'⌖', lucide:'map'},
+  {id:'arm', label:'ARM', icon:'◎', lucide:'users'},
+  {id:'armexplorer', label:'ARM Explorer', icon:'⌕', lucide:'search'},
+  {id:'bu', label:'Business Units', icon:'▥', lucide:'briefcase'},
+  {id:'growth', label:'Growth', icon:'↗', lucide:'trending-up'},
+  {id:'exceptions', label:'Exceptions', icon:'⚠', lucide:'alert-triangle'},
+  {id:'rankings', label:'Rankings', icon:'☰', lucide:'list-ordered'},
+  {id:'geo', label:'Geographic', icon:'✦', lucide:'globe'},
+  {id:'ai', label:'AI Insights', icon:'✎', lucide:'sparkles'},
+];
+const TAB_MAP = Object.fromEntries(TABS.map(t=>[t.id,t]));
+
+/* Sidebar sections — purely a navigation grouping, doesn't change any
+   view logic. Collapsible so a 17-tab list doesn't read as a wall of text.
+   The dedicated GP tab is dropped entirely when this bundle has GP hidden
+   (Area Manager / Centre Manager tiers, per access/settings.csv) — a whole
+   tab full of "—" would be more confusing than just not showing it. */
+const GROUPS = [
+  {label:'Overview', ids:['exec']},
+  {label:'Financials', ids:['revenue', ...(GP_VISIBLE?['gp']:[]), 'targets','licenses']},
+  {label:'Customer', ids:['csat']},
+  {label:'Locations & Teams', ids:['centre','centreexplorer','stateperf','arm','armexplorer','geo']},
+  {label:'Business Analysis', ids:['bu','growth','exceptions','rankings']},
+  {label:'AI', ids:['ai']},
+];
+let openGroups = new Set(GROUPS.map(g=>g.label));
+
+let activeTab = 'exec';
+const charts = {}; // id -> Chart instance, destroyed/recreated on render
+
+function el(tag, attrs={}, children=[]){
+  const e = document.createElement(tag);
+  for(const [k,v] of Object.entries(attrs)){
+    if(k==='class') e.className=v;
+    else if(k==='html') e.innerHTML=v;
+    else if(k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k,v);
+  }
+  (Array.isArray(children)?children:[children]).forEach(c=>{
+    if(c==null) return;
+    e.appendChild((typeof c==='string'||typeof c==='number')?document.createTextNode(String(c)):c);
+  });
+  return e;
+}
+
+function fyDateBounds(fy){
+  // FY24-25 -> Apr 1 2024 to Mar 31 2025
+  const startYr = 2000 + parseInt(fy.slice(2,4));
+  return {from: `${startYr}-04-01`, to: `${startYr+1}-03-31`};
+}
+function quarterDateBounds(fy, q){
+  const startYr = 2000 + parseInt(fy.slice(2,4));
+  const ranges = {
+    Q1:[`${startYr}-04-01`,`${startYr}-06-30`],
+    Q2:[`${startYr}-07-01`,`${startYr}-09-30`],
+    Q3:[`${startYr}-10-01`,`${startYr}-12-31`],
+    Q4:[`${startYr+1}-01-01`,`${startYr+1}-03-31`],
+  };
+  return {from:ranges[q][0], to:ranges[q][1]};
+}
+function clampToDataRange(d){ return d<MIN_DATE?MIN_DATE : d>MAX_DATE?MAX_DATE : d; }
+
+function buildFilterBar(){
+  const bar = document.getElementById('filterbar');
+  bar.innerHTML='';
+  const mkSelect = (label, options, value, onChange, allLabel='All')=>{
+    const sel = el('select',{onchange:(e)=>onChange(e.target.value)});
+    sel.appendChild(el('option',{value:'All'}, allLabel));
+    options.forEach(o=>sel.appendChild(el('option',{value:o},o)));
+    sel.value = value;
+    return el('div',{class:'fchip'},[el('span',{class:'fchip-label'},label), sel]);
+  };
+  const divider = ()=> el('div',{class:'fdivider'});
+  const mainRow = el('div',{class:'filter-row-main'});
+
+  // Today / WTD / MTD — active-state is derived by comparing the current
+  // date range against what each preset would produce right now, rather
+  // than tracked as separate state, so it self-corrects if the range gets
+  // changed some other way (FY select, custom dates, Reset) instead of
+  // silently staying highlighted when it no longer applies.
+  const now = new Date();
+  const todayStr = clampToDataRange(toDateStr(now));
+  const wtdStr = clampToDataRange(toDateStr(mostRecentMonday(now)));
+  const mtdStr = clampToDataRange(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`);
+  const quickActive = (from)=> state.fy==='All' && state.quarter==='All' && state.dateFrom===from && state.dateTo===todayStr;
+  mainRow.appendChild(el('div',{class:'quick-filter-group'},[
+    el('button',{class:'quick-btn'+(quickActive(todayStr)?' active':''), onclick:()=>applyQuickFilter('today')}, 'Today'),
+    el('button',{class:'quick-btn'+(quickActive(wtdStr)?' active':''), onclick:()=>applyQuickFilter('wtd')}, 'WTD'),
+    el('button',{class:'quick-btn'+(quickActive(mtdStr)?' active':''), onclick:()=>applyQuickFilter('mtd')}, 'MTD'),
+  ]));
+  mainRow.appendChild(divider());
+
+  mainRow.appendChild(mkSelect('FY', FYS, state.fy, v=>{
+    state.fy=v; state.quarter='All';
+    if(v!=='All'){ const b=fyDateBounds(v); state.dateFrom=clampToDataRange(b.from); state.dateTo=clampToDataRange(b.to); }
+    else { state.dateFrom=MIN_DATE; state.dateTo=MAX_DATE; }
+    onFilterChange();
+  }, 'All years'));
+  mainRow.appendChild(mkSelect('Quarter', ['Q1','Q2','Q3','Q4'], state.quarter, v=>{
+    state.quarter=v;
+    if(v!=='All' && state.fy!=='All'){ const b=quarterDateBounds(state.fy,v); state.dateFrom=clampToDataRange(b.from); state.dateTo=clampToDataRange(b.to); }
+    onFilterChange();
+  }, 'All quarters'));
+
+  // custom date range — exact-day precision, drives KPI cards; also sets month bounds for all breakdowns
+  const fromDate = el('input',{type:'date', min:MIN_DATE, max:MAX_DATE, onchange:e=>{
+    state.dateFrom = e.target.value || MIN_DATE; state.fy='All'; state.quarter='All'; onFilterChange();
+  }});
+  fromDate.value = state.dateFrom;
+  const toDate = el('input',{type:'date', min:MIN_DATE, max:MAX_DATE, onchange:e=>{
+    state.dateTo = e.target.value || MAX_DATE; state.fy='All'; state.quarter='All'; onFilterChange();
+  }});
+  toDate.value = state.dateTo;
+  mainRow.appendChild(el('div',{class:'fchip'},[el('span',{class:'fchip-label'},'From'), fromDate]));
+  mainRow.appendChild(el('div',{class:'fchip'},[el('span',{class:'fchip-label'},'To'), toDate]));
+  mainRow.appendChild(divider());
+
+  mainRow.appendChild(mkSelect('State', STATES, state.state, v=>{state.state=v; state.arm='All'; state.centre='All'; onFilterChange();}));
+  mainRow.appendChild(mkSelect('ARM', ARMS, state.arm, v=>{state.arm=v; state.centre='All'; onFilterChange();}));
+  const centreOptions = CENTRES.filter(c=>centreMatches(c.Centre) || true).map(c=>c.Centre).sort();
+  mainRow.appendChild(mkSelect('Centre', centreOptions, state.centre, v=>{state.centre=v; onFilterChange();}));
+  mainRow.appendChild(mkSelect('Business Unit', BUS, state.bu, v=>{state.bu=v; onFilterChange();}));
+  mainRow.appendChild(mkSelect('Location', LOC_TYPES, state.locType, v=>{state.locType=v; onFilterChange();}));
+  bar.appendChild(mainRow);
+
+  // Actions always live on their own dedicated row, hint text left / controls
+  // right — deterministic regardless of how many rows the filters above
+  // wrap to, rather than competing with them for space on whichever line
+  // happens to have room.
+  const actionsRow = el('div',{class:'filter-row-actions'});
+  actionsRow.appendChild(el('div',{style:'font-size:10.5px;color:var(--text-faint);'},
+    'KPI cards reflect the exact selected dates. Trend charts and breakdowns aggregate by full month.'));
+  const actionsRight = el('div',{class:'actions-right'});
+  const activeCount = countActiveFilters();
+  if(activeCount>0){
+    actionsRight.appendChild(el('span',{class:'filter-count-badge'}, activeCount+' filter'+(activeCount>1?'s':'')+' active'));
+  }
+  actionsRight.appendChild(el('button',{id:'resetFilters', onclick:resetFilters}, 'Reset'));
+  const exportWrap = el('div',{id:'exportMenu'});
+  exportWrap.appendChild(el('button',{class:'btn-export', onclick:()=>exportCurrentCSV()}, '⭳ CSV'));
+  exportWrap.appendChild(el('button',{class:'btn-export', onclick:()=>window.print()}, '⎙ PDF'));
+  exportWrap.appendChild(el('button',{class:'btn-export', id:'exportPptBtn', onclick:()=>exportCurrentPPT()}, '▤ PPT'));
+  actionsRight.appendChild(exportWrap);
+  actionsRow.appendChild(actionsRight);
+  bar.appendChild(actionsRow);
+}
+
+function countActiveFilters(){
+  let n = 0;
+  if(state.fy!=='All') n++;
+  if(state.quarter!=='All') n++;
+  if(state.fy==='All' && state.quarter==='All' && (state.dateFrom!==MIN_DATE || state.dateTo!==MAX_DATE)) n++;
+  if(state.state!=='All') n++;
+  if(state.arm!=='All') n++;
+  if(state.centre!=='All') n++;
+  if(state.bu!=='All') n++;
+  if(state.category!=='All') n++;
+  if(state.locType!=='All') n++;
+  return n;
+}
+
+function onFilterChange(){
+  buildBreadcrumb();
+  buildFilterBar();
+  renderAll();
+  syncURL();
+}
+
+function buildBreadcrumb(){
+  const bc = document.getElementById('breadcrumb');
+  bc.innerHTML='';
+  const parts = [];
+  if(state.state!=='All') parts.push({label:'State: '+state.state, clear:()=>{state.state='All';state.arm='All';state.centre='All';}});
+  if(state.arm!=='All') parts.push({label:'ARM: '+state.arm, clear:()=>{state.arm='All';state.centre='All';}});
+  if(state.centre!=='All') parts.push({label:'Centre: '+state.centre, clear:()=>{state.centre='All';}});
+  if(state.bu!=='All') parts.push({label:'BU: '+state.bu, clear:()=>{state.bu='All';}});
+  if(state.category!=='All') parts.push({label:'Category: '+state.category, clear:()=>{state.category='All';}});
+  if(state.fy!=='All') parts.push({label:state.fy, clear:()=>{state.fy='All';}});
+  if(state.quarter!=='All') parts.push({label:state.quarter, clear:()=>{state.quarter='All';}});
+  if(parts.length===0){ bc.style.display='none'; return; }
+  bc.style.display='flex';
+  parts.forEach((p,i)=>{
+    bc.appendChild(el('span',{class:'crumb', onclick:()=>{p.clear(); onFilterChange();}}, p.label+' ✕'));
+  });
+  bc.appendChild(el('span',{class:'clear', onclick:resetFilters},'Clear all'));
+}
+
+function tabIcon(t){
+  // Renders an <i data-lucide="..."> whose fallback text is the original
+  // glyph — if the Lucide CDN never loads (offline use), the glyph stays.
+  return el('i',{'data-lucide': t.lucide||''}, t.icon||'•');
+}
+
+function buildTabs(){
+  const bar = document.getElementById('tabbar');
+  bar.innerHTML='';
+  GROUPS.forEach(g=>{
+    const isOpen = openGroups.has(g.label);
+    bar.appendChild(el('div',{class:'tab-group-header', onclick:()=>{
+      if(isOpen) openGroups.delete(g.label); else openGroups.add(g.label);
+      buildTabs();
+    }},[
+      el('span',{}, g.label),
+      el('span',{class:'tgh-chevron'}, isOpen?'▾':'▸'),
+    ]));
+    if(!isOpen) return;
+    g.ids.forEach(id=>{
+      const t = TAB_MAP[id];
+      if(!t) return;
+      bar.appendChild(el('div',{class:'tab'+(t.id===activeTab?' active':''), onclick:()=>{
+        activeTab=t.id; buildTabs(); renderAll(); closeSidebar(); syncURL();
+      }},[
+        el('span',{class:'tab-icon'}, tabIcon(t)),
+        el('span',{}, t.label),
+      ]));
+    });
+  });
+  if(window.lucide) lucide.createIcons();
+}
+
+function toggleSidebar(){
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('open');
+}
+function closeSidebar(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+}
+
+/* ------------------------------------------------------------
+   Theme (light/dark) — persisted in localStorage. This is a
+   plain downloadable HTML file (not a sandboxed artifact), so
+   localStorage is safe to use here.
+   ------------------------------------------------------------ */
+function applyTheme(theme){
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('theme-toggle');
+  if(btn) btn.innerHTML = '<i data-lucide="'+(theme==='dark'?'sun':'moon')+'">'+(theme==='dark'?'☀':'🌙')+'</i>';
+  if(window.lucide) lucide.createIcons();
+  try{ localStorage.setItem('aptronix-theme', theme); }catch(e){ /* non-fatal */ }
+}
+function toggleTheme(){
+  const current = document.documentElement.getAttribute('data-theme')==='dark' ? 'dark' : 'light';
+  applyTheme(current==='dark' ? 'light' : 'dark');
+}
+function initTheme(){
+  let saved = 'light';
+  try{ saved = localStorage.getItem('aptronix-theme') || 'light'; }catch(e){ /* non-fatal */ }
+  applyTheme(saved);
+}
+
+/* ------------------------------------------------------------
+   Command palette (Cmd/Ctrl+K) — jump to a tab or filter down
+   to a centre by name.
+   ------------------------------------------------------------ */
+let cmdkIndex = 0;
+function openCmdk(){
+  document.getElementById('cmdk-overlay').classList.add('open');
+  const input = document.getElementById('cmdk-input');
+  input.value = '';
+  renderCmdkResults('');
+  setTimeout(()=>input.focus(), 0);
+}
+function closeCmdk(){
+  document.getElementById('cmdk-overlay').classList.remove('open');
+}
+function cmdkMatches(q){
+  const query = q.trim().toLowerCase();
+  const tabMatches = TABS.filter(t=>!query || t.label.toLowerCase().includes(query))
+    .map(t=>({type:'view', id:t.id, label:t.label, icon:t.lucide}));
+  const centreMatches = (query ? CENTRES.filter(c=>c.Centre.toLowerCase().includes(query)) : [])
+    .slice(0,8)
+    .map(c=>({type:'centre', id:c.Centre, label:c.Centre, icon:'building-2'}));
+  return {tabMatches, centreMatches};
+}
+function renderCmdkResults(q){
+  const {tabMatches, centreMatches} = cmdkMatches(q);
+  const box = document.getElementById('cmdk-results');
+  box.innerHTML = '';
+  cmdkIndex = 0;
+  const all = [];
+  if(tabMatches.length){
+    box.appendChild(el('div',{class:'cmdk-group-label'}, 'Views'));
+    tabMatches.forEach(m=>{ box.appendChild(cmdkItemEl(m, all.length)); all.push(m); });
+  }
+  if(centreMatches.length){
+    box.appendChild(el('div',{class:'cmdk-group-label'}, 'Centres'));
+    centreMatches.forEach(m=>{ box.appendChild(cmdkItemEl(m, all.length)); all.push(m); });
+  }
+  if(!all.length){
+    box.appendChild(el('div',{id:'cmdk-empty'}, 'No matches'));
+  }
+  window.__cmdkList = all;
+  highlightCmdk(0);
+  if(window.lucide) lucide.createIcons();
+}
+function cmdkItemEl(m, idx){
+  return el('div',{class:'cmdk-item', 'data-idx':String(idx), onclick:()=>selectCmdk(idx)},[
+    el('i',{class:'cmdk-icon', 'data-lucide':m.icon||'circle'}, '•'),
+    el('span',{}, m.label),
+  ]);
+}
+function highlightCmdk(idx){
+  const items = document.querySelectorAll('.cmdk-item');
+  items.forEach(it=>it.classList.remove('active'));
+  if(items[idx]) items[idx].classList.add('active');
+  cmdkIndex = idx;
+}
+function selectCmdk(idx){
+  const item = (window.__cmdkList||[])[idx];
+  if(!item) return;
+  if(item.type==='view'){
+    activeTab = item.id; buildTabs(); renderAll();
+  } else if(item.type==='centre'){
+    state.centre = item.id; onFilterChange();
+  }
+  closeCmdk();
+}
+document.addEventListener('keydown', function(e){
+  const isCmdk = (e.metaKey || e.ctrlKey) && e.key.toLowerCase()==='k';
+  if(isCmdk){
+    e.preventDefault();
+    const overlay = document.getElementById('cmdk-overlay');
+    if(overlay.classList.contains('open')) closeCmdk(); else openCmdk();
+    return;
+  }
+  const overlay = document.getElementById('cmdk-overlay');
+  if(!overlay || !overlay.classList.contains('open')) return;
+  if(e.key==='Escape'){ closeCmdk(); return; }
+  const list = window.__cmdkList||[];
+  if(e.key==='ArrowDown'){ e.preventDefault(); highlightCmdk(Math.min(cmdkIndex+1, list.length-1)); }
+  else if(e.key==='ArrowUp'){ e.preventDefault(); highlightCmdk(Math.max(cmdkIndex-1, 0)); }
+  else if(e.key==='Enter'){ e.preventDefault(); selectCmdk(cmdkIndex); }
+});
+
+function buildViewShells(){
+  const views = document.getElementById('views');
+  views.innerHTML='';
+  TABS.forEach(t=>{
+    views.appendChild(el('div',{id:'view-'+t.id, class:'view'+(t.id===activeTab?' active':'')}));
+  });
+}
+function showActiveView(){
+  TABS.forEach(t=>{
+    document.getElementById('view-'+t.id).classList.toggle('active', t.id===activeTab);
+  });
+}
+
+function syncFilterUI(){ buildFilterBar(); buildBreadcrumb(); }
+
+
+/* ================================================================
+   Reusable UI components
+   ================================================================ */
+function kpiCard(label, value, deltaText, deltaDir){
+  const dirClass = deltaDir==='up'?'up':deltaDir==='down'?'down':'flat';
+  const arrow = deltaDir==='up'?'▲':deltaDir==='down'?'▼':'—';
+  // Show the colored arrow whenever a direction was computed, even if the
+  // caller didn't supply caption text (e.g. Achievement-vs-target cards) —
+  // previously these silently rendered no indicator at all.
+  const showDelta = deltaText || deltaDir;
+  return el('div',{class:'kpi'},[
+    el('div',{class:'accent-bar'}),
+    el('div',{class:'label'}, label),
+    el('div',{class:'value'}, value),
+    showDelta? el('div',{class:'delta '+dirClass}, arrow+(deltaText?' '+deltaText:'')) : null,
+  ]);
+}
+function sparklineSVG(values, color){
+  if(!values || values.length<2) return null;
+  const w=100, h=28, pad=2;
+  const min = Math.min(...values), max = Math.max(...values);
+  const range = (max-min)||1;
+  const pts = values.map((v,i)=>{
+    const x = pad + (i/(values.length-1))*(w-2*pad);
+    const y = h-pad - ((v-min)/range)*(h-2*pad);
+    return x.toFixed(1)+','+y.toFixed(1);
+  }).join(' ');
+  const lastUp = values[values.length-1] >= values[0];
+  const c = color || (lastUp?'#22d3a8':'#f2555a');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  svg.setAttribute('width','100%'); svg.setAttribute('height','28'); svg.style.display='block';
+  const poly = document.createElementNS('http://www.w3.org/2000/svg','polyline');
+  poly.setAttribute('points', pts);
+  poly.setAttribute('fill','none'); poly.setAttribute('stroke', c); poly.setAttribute('stroke-width','1.6');
+  poly.setAttribute('stroke-linecap','round'); poly.setAttribute('stroke-linejoin','round');
+  svg.appendChild(poly);
+  return svg;
+}
+function richKpiCard({label, value, mom, qoq, yoy, spark}){
+  const badges = [];
+  const mkBadge = (lbl, v)=>{
+    if(v===null||v===undefined||isNaN(v)) return null;
+    const cls = v>0.05?'pct-up':v<-0.05?'pct-down':'pct-flat';
+    return el('span',{class:cls, style:'font-size:10.5px;margin-right:8px;'}, lbl+' '+fmtPct(v));
+  };
+  [['MoM',mom],['QoQ',qoq],['YoY',yoy]].forEach(([l,v])=>{ const b=mkBadge(l,v); if(b) badges.push(b); });
+  const card = el('div',{class:'kpi'},[
+    el('div',{class:'accent-bar'}),
+    el('div',{class:'label'}, label),
+    el('div',{class:'value'}, value),
+    badges.length? el('div',{style:'margin-top:6px;'}, badges) : null,
+  ]);
+  if(spark && spark.length>=2){
+    const sparkWrap = el('div',{style:'margin-top:8px;'});
+    const s = sparklineSVG(spark);
+    if(s) sparkWrap.appendChild(s);
+    card.appendChild(sparkWrap);
+  }
+  return card;
+}
+function deltaDir(v){ if(v===null||v===undefined||isNaN(v)) return 'flat'; return v>0.05?'up':v<-0.05?'down':'flat'; }
+
+function panel(title, tag, content){
+  const h = el('h3',{},[title, tag?el('span',{class:'tag'},tag):null]);
+  return el('div',{class:'panel'},[h, content]);
+}
+
+function gpCaveatBanner(){
+  const status = gpCoverageStatus();
+  if(status==='full') return null;
+  const msg = status==='none'
+    ? 'GP for the selected period uses transaction GP only — Spare Parts Incentives do not yet cover these months.'
+    : 'GP for part of the selected period includes Spare Parts Incentives; the remaining months use transaction GP only, pending incentive data.';
+  return el('div',{class:'insight-card neutral', style:'margin-bottom:16px;padding:10px 14px;'},[
+    el('p',{style:'margin:0;font-size:11.5px;'}, '📋 '+msg)
+  ]);
+}
+
+function destroyChart(id){ if(charts[id]){ charts[id].destroy(); delete charts[id]; } }
+function chartFallback(id){
+  const canvas = document.getElementById(id);
+  if(!canvas || !canvas.parentElement) return;
+  canvas.parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;min-height:120px;color:var(--text-faint);font-size:11.5px;text-align:center;padding:16px;line-height:1.5;">Chart library could not load from any CDN — check your internet connection.<br>The underlying data is still available in the tables and via CSV export.</div>';
+}
+function lineChart(id, labels, datasets, opts={}){
+  if(typeof Chart==='undefined'){ chartFallback(id); return; }
+  destroyChart(id);
+  const canvas = document.getElementById(id);
+  if(!canvas) return;
+  charts[id] = new Chart(canvas, {
+    type:'line',
+    data:{labels, datasets},
+    options: Object.assign({
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      plugins:{
+        legend:{labels:{color:'#5b6478', boxWidth:10, font:{size:11}}},
+        tooltip:{backgroundColor:'#131b2e', borderColor:'#e2e6ee', borderWidth:1, titleColor:'#ffffff', bodyColor:'#e8ecf5'}
+      },
+      scales:{
+        x:{ticks:{color:'#8991a3', font:{size:10}}, grid:{color:'#edf0f5'}},
+        y:{ticks:{color:'#8991a3', font:{size:10}}, grid:{color:'#edf0f5'}}
+      }
+    }, opts)
+  });
+}
+function barChart(id, labels, datasets, opts={}){
+  if(typeof Chart==='undefined'){ chartFallback(id); return; }
+  destroyChart(id);
+  const canvas = document.getElementById(id);
+  if(!canvas) return;
+  charts[id] = new Chart(canvas, {
+    type:'bar',
+    data:{labels, datasets},
+    options: Object.assign({
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{labels:{color:'#5b6478', boxWidth:10, font:{size:11}}},
+        tooltip:{backgroundColor:'#131b2e', borderColor:'#e2e6ee', borderWidth:1, titleColor:'#ffffff', bodyColor:'#e8ecf5'}
+      },
+      scales:{
+        x:{ticks:{color:'#8991a3', font:{size:10}}, grid:{display:false}},
+        y:{ticks:{color:'#8991a3', font:{size:10}}, grid:{color:'#edf0f5'}}
+      },
+      onClick: opts.onBarClick? (evt, elements)=>{
+        if(elements.length){ opts.onBarClick(labels[elements[0].index]); }
+      } : undefined
+    }, opts)
+  });
+}
+function doughnutChart(id, labels, data, colors){
+  if(typeof Chart==='undefined'){ chartFallback(id); return; }
+  destroyChart(id);
+  const canvas = document.getElementById(id);
+  if(!canvas) return;
+  charts[id] = new Chart(canvas, {
+    type:'doughnut',
+    data:{labels, datasets:[{data, backgroundColor:colors, borderColor:'#ffffff', borderWidth:2}]},
+    options:{
+      responsive:true, maintainAspectRatio:false, cutout:'62%',
+      plugins:{legend:{position:'right', labels:{color:'#5b6478', boxWidth:10, font:{size:10.5}, padding:10}}}
+    }
+  });
+}
+const PALETTE = ['#3aa0ff','#22d3a8','#e8b74e','#f2555a','#a78bfa','#f97316','#38bdf8','#4ade80','#fb7185','#94a3b8'];
+
+function dataTable({columns, rows, onRowClick, sortKey, sortDir='desc', id}){
+  const wrap = el('div',{class:'table-scroll'});
+  const table = el('table',{class:'data-table'});
+  const thead = el('thead');
+  const trh = el('tr');
+  const activeSort = id ? tableSortState[id] : null;
+  columns.forEach(col=>{
+    const isSorted = activeSort && activeSort.key===col.key;
+    const arrow = isSorted ? (activeSort.dir==='desc' ? ' ▾' : ' ▴') : '';
+    trh.appendChild(el('th',{class:isSorted?'th-sorted':'', onclick:()=>{
+      if(id) tableSortState[id] = {key:col.key, dir: (tableSortState[id]&&tableSortState[id].key===col.key&&tableSortState[id].dir==='desc')?'asc':'desc'};
+      renderAll();
+    }}, col.label+arrow));
+  });
+  thead.appendChild(trh); table.appendChild(thead);
+  const tbody = el('tbody');
+  rows.forEach(r=>{
+    const tr = el('tr',{onclick: onRowClick? ()=>onRowClick(r) : null});
+    columns.forEach(col=>{
+      tr.appendChild(col.render? col.render(r) : el('td',{}, String(r[col.key]??'')));
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  return wrap;
+}
+const tableSortState = {};
+function applySorting(id, rows, defaultKey, defaultDir='desc'){
+  const s = tableSortState[id] || {key:defaultKey, dir:defaultDir};
+  const arr = [...rows].sort((a,b)=>{
+    const va=a[s.key], vb=b[s.key];
+    if(typeof va==='string') return s.dir==='asc'? va.localeCompare(vb) : vb.localeCompare(va);
+    return s.dir==='asc'? va-vb : vb-va;
+  });
+  return arr;
+}
+function numCell(val, fmt=fmtINR){ return el('td',{class:'num'}, fmt(val)); }
+function pctCell(val){
+  const cls = val>0.05?'pct-up':val<-0.05?'pct-down':'pct-flat';
+  const txt = (val===null||val===undefined||isNaN(val))?'—':fmtPct(val);
+  return el('td',{class:'num '+cls}, txt);
+}
+function barCell(val, max){
+  const pct = max>0? Math.max(2,(val/max)*100) : 0;
+  return el('td',{}, el('div',{class:'bar-cell'},[
+    el('div',{class:'bar-track'}, el('div',{class:'bar-fill', style:'width:'+pct+'%'})),
+  ]));
+}
+
+function exportCSV(filename, columns, rows){
+  const header = columns.map(c=>'"'+c.label.replace(/"/g,'""')+'"').join(',');
+  const lines = rows.map(r=>columns.map(c=>{
+    let v = c.raw? c.raw(r) : (r[c.key]??'');
+    if(typeof v==='number') v = v.toFixed(2);
+    return '"'+String(v).replace(/"/g,'""')+'"';
+  }).join(','));
+  const csv = [header, ...lines].join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=filename; a.click();
+  URL.revokeObjectURL(url);
+}
+let currentExporter = null; // set by each view render: {filename, columns, rows}
+function exportCurrentCSV(){
+  if(!currentExporter){ alert('Nothing to export on this view yet.'); return; }
+  exportCSV(currentExporter.filename, currentExporter.columns, currentExporter.rows);
+}
+
+/* ---- PPTX export (loaded on demand — not on page load, to avoid adding
+   a third external dependency to the critical path) ---- */
+function loadPptxLib(){
+  return new Promise((resolve, reject)=>{
+    if(window.PptxGenJS) return resolve(true);
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js';
+    s.onload = ()=> window.PptxGenJS ? resolve(true) : reject(new Error('PptxGenJS did not initialize'));
+    s.onerror = ()=> reject(new Error('Could not load PPT export library'));
+    document.head.appendChild(s);
+  });
+}
+async function exportCurrentPPT(){
+  const btn = document.getElementById('exportPptBtn');
+  const original = btn ? btn.textContent : null;
+  if(btn){ btn.textContent = 'Building…'; btn.disabled = true; }
+  try{
+    await loadPptxLib();
+    const pptx = new window.PptxGenJS();
+    pptx.defineLayout({name:'WIDE', width:13.33, height:7.5});
+    pptx.layout = 'WIDE';
+    const NAVY = '0B1220', PANEL='111A2E', ACCENT='3AA0FF', GOOD='22D3A8', TEXT='E8ECF5', DIM='8D9AB3';
+
+    // Title slide
+    let s1 = pptx.addSlide(); s1.background = {color:NAVY};
+    s1.addText('Aptronix Service — Executive Summary', {x:0.6,y:2.6,w:12,h:1, fontSize:32, bold:true, color:TEXT, fontFace:'Georgia'});
+    const rangeLabel = `${state.dateFrom} to ${state.dateTo}`;
+    s1.addText(rangeLabel, {x:0.6,y:3.5,w:12,h:0.5, fontSize:14, color:DIM});
+    s1.addText('Apple Premium Partner · Apple Authorised Service Provider', {x:0.6,y:4.0,w:12,h:0.4, fontSize:11, color:DIM});
+
+    // KPI slide
+    const totals = getExactRangeTotals();
+    const g = kpiGrowthContext();
+    const csatRows = getFilteredCSAT();
+    const avgCsat = csatRows.length? csatRows.reduce((s,r)=>s+r.value,0)/csatRows.length : null;
+    let s2 = pptx.addSlide(); s2.background = {color:NAVY};
+    s2.addText('Key Performance Indicators', {x:0.5,y:0.4,w:12,h:0.6, fontSize:22, bold:true, color:TEXT, fontFace:'Georgia'});
+    const kpiData = [
+      ['Revenue', fmtINR(totals.revenue), g.revMoM!==null?fmtPct(g.revMoM)+' MoM':''],
+      ['Gross Profit', fmtINR(totals.gp), g.gpMoM!==null?fmtPct(g.gpMoM)+' MoM':''],
+      ['GP %', totals.gpPct.toFixed(1)+'%', ''],
+      ['Transactions', fmtNum(totals.txns), ''],
+      ['Avg Ticket Size', fmtINR(totals.ats), ''],
+      ['Avg CSAT', avgCsat!==null?avgCsat.toFixed(0)+'%':'—', ''],
+    ];
+    let kx=0.5, ky=1.3;
+    kpiData.forEach((k,i)=>{
+      const col = i%3, row = Math.floor(i/3);
+      const bx = kx + col*4.1, by = ky + row*2.0;
+      s2.addShape('roundRect', {x:bx,y:by,w:3.8,h:1.7, fill:{color:PANEL}, line:{color:'22304A'}, rectRadius:0.08});
+      s2.addText(k[0].toUpperCase(), {x:bx+0.2,y:by+0.15,w:3.4,h:0.3, fontSize:9, color:DIM, charSpacing:1});
+      s2.addText(k[1], {x:bx+0.2,y:by+0.45,w:3.4,h:0.7, fontSize:24, bold:true, color:TEXT, fontFace:'Georgia'});
+      if(k[2]) s2.addText(k[2], {x:bx+0.2,y:by+1.15,w:3.4,h:0.35, fontSize:11, color:k[2].startsWith('+')?GOOD:'F2555A'});
+    });
+
+    // Top/Bottom centres slide
+    const cr = centreRanking();
+    let s3 = pptx.addSlide(); s3.background = {color:NAVY};
+    s3.addText('Top & Bottom Performing Centres', {x:0.5,y:0.4,w:12,h:0.6, fontSize:22, bold:true, color:TEXT, fontFace:'Georgia'});
+    const top5 = cr.slice(0,5), bottom5 = [...cr].sort((a,b)=>a.revenue-b.revenue).slice(0,5);
+    const mkRows = (arr)=>[['#','Centre','Revenue','GP%'], ...arr.map((r,i)=>[String(i+1), r.name, fmtINR(r.revenue), r.gpPct.toFixed(1)+'%'])];
+    s3.addTable(mkRows(top5), {x:0.5,y:1.3,w:5.9,h:2.8, fontSize:11, color:TEXT, fill:{color:PANEL}, border:{color:'22304A',pt:0.5}, autoPage:false});
+    s3.addTable(mkRows(bottom5), {x:6.7,y:1.3,w:5.9,h:2.8, fontSize:11, color:TEXT, fill:{color:PANEL}, border:{color:'22304A',pt:0.5}, autoPage:false});
+
+    // Executive summary slide
+    let s4 = pptx.addSlide(); s4.background = {color:NAVY};
+    s4.addText('AI Executive Summary', {x:0.5,y:0.4,w:12,h:0.6, fontSize:22, bold:true, color:TEXT, fontFace:'Georgia'});
+    s4.addText(buildExecutiveSummary(), {x:0.5,y:1.3,w:12,h:2, fontSize:14, color:DIM, lineSpacing:22});
+    const alerts = buildExecutiveAlerts();
+    s4.addText('Alerts', {x:0.5,y:3.4,w:12,h:0.4, fontSize:14, bold:true, color:TEXT});
+    s4.addText(alerts.slice(0,6).map(a=>'• '+a.text).join('\n'), {x:0.5,y:3.8,w:12,h:3, fontSize:11.5, color:DIM, lineSpacing:18});
+
+    await pptx.writeFile({fileName:'aptronix_service_summary.pptx'});
+  }catch(e){
+    alert('Could not build the PowerPoint export — check your internet connection (this uses a CDN-hosted library). Try CSV export instead.');
+  }finally{
+    if(btn){ btn.textContent = original; btn.disabled = false; }
+  }
+}
+
+/* ================================================================
+   VIEW: Executive Overview
+   ================================================================ */
+/* ================================================================
+   Growth helper for KPI cards (MoM/QoQ/YoY + sparkline) — shared
+   across Executive/Revenue/GP tabs
+   ================================================================ */
+function kpiGrowthContext(){
+  const series = withYoY(withMoM(monthlySeries()));
+  const q = quarterlySeries().map((r,i,arr)=>{
+    const prev = arr[i-1];
+    return {...r, qoq: prev? safeDiv(r.revenue-prev.revenue, prev.revenue)*100 : null,
+                  gpQoq: prev? safeDiv(r.gp-prev.gp, prev.gp)*100 : null};
+  });
+  // "last" means the last COMPLETE month — an in-progress month (partial
+  // data, e.g. 4 days of the current month) isn't a fair MoM/YoY/QoQ
+  // comparison point. Same reasoning applied to whichever quarter the
+  // in-progress month falls in.
+  const last = lastCompleteRow(series);
+  const now = new Date();
+  const curRealMk = now.getFullYear()*100 + (now.getMonth()+1);
+  const curRealFYQ = MONTH_MAP[curRealMk]?.FYQ;
+  let lastQ = q[q.length-1];
+  if(lastQ && curRealFYQ && lastQ.label===curRealFYQ && q.length>1) lastQ = q[q.length-2];
+  const spark = series.slice(-6).map(s=>s.revenue);
+  const sparkGP = series.slice(-6).map(s=>s.gp);
+  return {
+    revMoM: last?last.mom:null, revYoY: last?last.yoy:null, revQoQ: lastQ?lastQ.qoq:null,
+    gpMoM: (()=>{ if(!last) return null; const idx=series.indexOf(last); if(idx<1) return null; const p=series[idx-1]; return p? safeDiv(last.gp-p.gp,p.gp)*100 : null; })(),
+    gpQoQ: lastQ?lastQ.gpQoq:null,
+    gpYoY: (()=>{ if(!last) return null; const byMk={}; series.forEach(r=>byMk[r.mk]=r); const p=byMk[last.mk-100]; return p? safeDiv(last.gp-p.gp,p.gp)*100 : null; })(),
+    spark, sparkGP,
+  };
+}
+
+/* ================================================================
+   Executive Alerts — rule-based, evaluated on the current filter
+   ================================================================ */
+function buildExecutiveAlerts(){
+  const alerts = [];
+  const g = kpiGrowthContext();
+  const cr = centreRanking();
+  const csatRows = getFilteredCSAT();
+
+  if(g.revMoM!==null && g.revMoM < -5){
+    alerts.push({level:'bad', text:`Revenue declined ${Math.abs(g.revMoM).toFixed(1)}% month-on-month.`});
+  }
+  if(g.gpMoM!==null && g.gpMoM < -5){
+    alerts.push({level:'bad', text:`GP declined ${Math.abs(g.gpMoM).toFixed(1)}% month-on-month.`});
+  }
+  if(g.revMoM!==null && g.gpMoM!==null && g.revMoM>2 && g.gpMoM<0){
+    alerts.push({level:'warn', text:`Revenue is growing (+${g.revMoM.toFixed(1)}%) but GP is falling (${g.gpMoM.toFixed(1)}%) — margin compression risk.`});
+  }
+  if(g.revMoM!==null && g.gpMoM!==null && g.gpMoM>2 && g.revMoM<0){
+    alerts.push({level:'good', text:`GP is growing (+${g.gpMoM.toFixed(1)}%) despite falling revenue (${g.revMoM.toFixed(1)}%) — mix/margin improvement.`});
+  }
+  // CSAT below threshold
+  if(csatRows.length){
+    const byCentre = groupSum(csatRows.map(r=>({centre:r.centre, revenue:r.value, gp:0, txns:1})), r=>r.centre);
+    const low = [...byCentre.entries()].map(([k,v])=>({name:k, value:v.revenue/v.txns})).filter(c=>c.value<75);
+    if(low.length) alerts.push({level:'warn', text:`${low.length} centre${low.length>1?'s':''} below 75% CSAT threshold: ${low.slice(0,4).map(c=>c.name).join(', ')}${low.length>4?'…':''}.`});
+  }
+  // low GP centres (below 15% GP margin, min revenue floor to avoid noise)
+  const lowGP = cr.filter(c=>c.revenue>100000 && c.gpPct<15);
+  if(lowGP.length) alerts.push({level:'bad', text:`${lowGP.length} centre${lowGP.length>1?'s':''} running below 15% GP margin: ${lowGP.slice(0,4).map(c=>c.name).join(', ')}${lowGP.length>4?'…':''}.`});
+
+  // top growing / declining centres (last two available COMPLETE months,
+  // network-wide) — an in-progress month would flag centres as
+  // dramatically "declining" purely because only a few days have posted.
+  const allMk = [...new Set(FACT_MONTH.map(r=>r[0]))].sort((a,b)=>a-b).filter(mk=>!isCurrentRealMonth(mk));
+  if(allMk.length>=2){
+    const mkLast=allMk[allMk.length-1], mkPrev=allMk[allMk.length-2];
+    const lastMap={}, prevMap={};
+    FACT_MONTH.forEach(([mk,c,rev])=>{ if(!centreMatches(c)) return; if(mk===mkLast) lastMap[c]=rev; if(mk===mkPrev) prevMap[c]=rev; });
+    const moms = Object.keys(lastMap).filter(c=>prevMap[c]>0).map(c=>({centre:c, mom:safeDiv(lastMap[c]-prevMap[c],prevMap[c])*100}));
+    moms.sort((a,b)=>b.mom-a.mom);
+    if(moms.length){
+      const topG = moms.slice(0,3).filter(m=>m.mom>10);
+      const topD = moms.slice(-3).filter(m=>m.mom<-10).reverse();
+      if(topG.length) alerts.push({level:'good', text:`Top growing: ${topG.map(m=>m.centre+' ('+fmtPct(m.mom)+')').join(', ')}.`});
+      if(topD.length) alerts.push({level:'bad', text:`Top declining: ${topD.map(m=>m.centre+' ('+fmtPct(m.mom)+')').join(', ')} — flagged for intervention.`});
+    }
+  }
+  if(!alerts.length) alerts.push({level:'good', text:'No critical alerts for the current selection — business is tracking within normal bounds.'});
+  return alerts;
+}
+function renderExecutiveAlerts(){
+  const alerts = buildExecutiveAlerts();
+  const wrap = el('div',{class:'panel', style:'margin-bottom:20px;'});
+  wrap.appendChild(el('h3',{}, 'Executive Alerts'));
+  const list = el('div',{style:'display:flex;flex-direction:column;gap:8px;'});
+  const iconFor = {bad:'🔴', warn:'🟡', good:'🟢'};
+  alerts.forEach(a=>{
+    list.appendChild(el('div',{style:'display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--text-dim);line-height:1.5;'},[
+      el('span',{}, iconFor[a.level]),
+      el('span',{}, a.text),
+    ]));
+  });
+  wrap.appendChild(list);
+  return wrap;
+}
+
+/* AI Executive Summary — one-paragraph auto narrative from current filters */
+function buildExecutiveSummary(){
+  const g = kpiGrowthContext();
+  const totals = getExactRangeTotals();
+  const cr = centreRanking();
+  const sr = stateRanking();
+  const csatRows = getFilteredCSAT();
+  const avgCsat = csatRows.length? csatRows.reduce((s,r)=>s+r.value,0)/csatRows.length : null;
+
+  const parts = [];
+  if(g.revMoM!==null){
+    parts.push(`Revenue ${g.revMoM>=0?'increased':'decreased'} ${Math.abs(g.revMoM).toFixed(1)}% month-on-month to ${fmtINR(totals.revenue)} for the selected period`);
+    if(sr.length>=2) parts.push(`, led by ${sr[0].name}${sr[1]?' and '+sr[1].name:''}`);
+    parts.push('. ');
+  }
+  parts.push(`GP margin stands at ${totals.gpPct.toFixed(1)}%`);
+  if(g.gpMoM!==null) parts.push(` (${g.gpMoM>=0?'up':'down'} from last month)`);
+  parts.push('. ');
+  if(avgCsat!==null) parts.push(`Average CSAT is running at ${avgCsat.toFixed(0)}%. `);
+  const lowGP = cr.filter(c=>c.revenue>100000 && c.gpPct<15);
+  const lowCsat = csatRows.length? [...groupSum(csatRows.map(r=>({centre:r.centre,revenue:r.value,gp:0,txns:1})), r=>r.centre).entries()].filter(([k,v])=>v.revenue/v.txns<75) : [];
+  const flagged = new Set([...lowGP.map(c=>c.name), ...lowCsat.map(([k])=>k)]);
+  if(flagged.size) parts.push(`${flagged.size} centre${flagged.size>1?'s':''} require management attention on margin or satisfaction.`);
+  else parts.push('No centres are currently flagged for urgent intervention.');
+  return parts.join('');
+}
+
+/* ================================================================
+   Performance Score — weighted 0-100 composite per centre
+   Revenue Growth 25% / GP Growth 25% / GP Margin 15% / CSAT 20% / Productivity 15%
+   ================================================================ */
+function minMaxNorm(values, v){
+  const min = Math.min(...values), max = Math.max(...values);
+  if(max===min) return 50;
+  return ((v-min)/(max-min))*100;
+}
+function centreGrowthMap(metricIndex){
+  // metricIndex: 2=revenue, 3=gp in FACT_MONTH rows [mk,centre,revenue,gp,txns]
+  // Uses the last COMPLETE month vs the one before it — comparing an
+  // in-progress month's partial total against a full prior month would
+  // corrupt this growth figure, and it directly feeds 50% of the
+  // Performance Score weighting below, so getting this right matters
+  // more here than almost anywhere else in the app.
+  const allMk = [...new Set(FACT_MONTH.map(r=>r[0]))].sort((a,b)=>a-b).filter(mk=>!isCurrentRealMonth(mk));
+  const out = {};
+  if(allMk.length<2) return out;
+  const mkLast=allMk[allMk.length-1], mkPrev=allMk[allMk.length-2];
+  const lastMap={}, prevMap={};
+  FACT_MONTH.forEach(row=>{
+    const [mk,c] = row; const val = row[metricIndex];
+    if(!centreMatches(c)) return;
+    if(mk===mkLast) lastMap[c]=val;
+    if(mk===mkPrev) prevMap[c]=val;
+  });
+  Object.keys(lastMap).forEach(c=>{
+    if(prevMap[c]!==undefined && prevMap[c]!==0) out[c] = safeDiv(lastMap[c]-prevMap[c], prevMap[c])*100;
+  });
+  return out;
+}
+function computePerformanceScores(){
+  const cr = centreRanking();
+  if(!cr.length) return [];
+  const revGrowth = centreGrowthMap(2);
+  const gpGrowth = centreGrowthMap(3);
+  const csatRows = getFilteredCSAT();
+  const csatByCentre = groupSum(csatRows.map(r=>({centre:r.centre, revenue:r.value, gp:0, txns:1})), r=>r.centre);
+
+  const revGrowthVals = cr.map(c=>revGrowth[c.name]??0);
+  const gpGrowthVals = cr.map(c=>gpGrowth[c.name]??0);
+  const gpMarginVals = cr.map(c=>c.gpPct);
+  const csatVals = cr.map(c=>{ const o=csatByCentre.get(c.name); return o? o.revenue/o.txns : 75; });
+  const atsVals = cr.map(c=>c.ats);
+
+  return cr.map(c=>{
+    const rg = revGrowth[c.name]??0, gg = gpGrowth[c.name]??0;
+    const csatObj = csatByCentre.get(c.name);
+    const csatVal = csatObj? csatObj.revenue/csatObj.txns : 75;
+    const nRG = minMaxNorm(revGrowthVals, rg);
+    const nGG = minMaxNorm(gpGrowthVals, gg);
+    const nGM = minMaxNorm(gpMarginVals, c.gpPct);
+    const nCS = csatVal; // already 0-100
+    const nPR = minMaxNorm(atsVals, c.ats);
+    const score = nRG*0.25 + nGG*0.25 + nGM*0.15 + nCS*0.20 + nPR*0.15;
+    let bucket, bucketClass;
+    if(score>=80){bucket='Excellent';bucketClass='good';}
+    else if(score>=65){bucket='Good';bucketClass='good';}
+    else if(score>=50){bucket='Average';bucketClass='flat';}
+    else if(score>=35){bucket='Needs Attention';bucketClass='warn';}
+    else {bucket='Critical';bucketClass='bad';}
+    return {name:c.name, state:c.state, arm:c.arm, score:Math.round(score), bucket, bucketClass,
+            revGrowth:rg, gpGrowth:gg, gpMargin:c.gpPct, csat:csatVal, revenue:c.revenue, gp:c.gp};
+  }).sort((a,b)=>b.score-a.score);
+}
+
+/* ================================================================
+   Simple Forecast — linear trend extrapolation (no external deps)
+   ================================================================ */
+function linearForecast(series, periodsAhead){
+  // series must already exclude any in-progress/incomplete month — see
+  // completeMonthsOnly() — regressing on a partial month's total would
+  // bias the fitted trend line downward.
+  const n = series.length;
+  if(n<3) return [];
+  const xs = series.map((_,i)=>i);
+  const ys = series.map(s=>s.revenue);
+  const xMean = xs.reduce((a,b)=>a+b,0)/n, yMean = ys.reduce((a,b)=>a+b,0)/n;
+  let num=0, den=0;
+  for(let i=0;i<n;i++){ num += (xs[i]-xMean)*(ys[i]-yMean); den += (xs[i]-xMean)**2; }
+  const slope = den===0?0:num/den;
+  const intercept = yMean - slope*xMean;
+  // residual std-dev for a rough confidence band
+  const resid = ys.map((y,i)=>y-(slope*xs[i]+intercept));
+  const rmse = Math.sqrt(resid.reduce((s,r)=>s+r*r,0)/n);
+  const lastCompleteMk = series[series.length-1].mk;
+  // "Next month" means the first month with no data at all yet — if a
+  // month is already in progress (has partial actuals), it's not being
+  // forecast here, it already has a live run-rate projection elsewhere.
+  const now = new Date();
+  const curRealMk = now.getFullYear()*100 + (now.getMonth()+1);
+  let forecastStartMk = nextMonthKey(lastCompleteMk);
+  while(forecastStartMk<=curRealMk) forecastStartMk = nextMonthKey(forecastStartMk);
+  const monthDiff = (a,b)=> (Math.floor(b/100)-Math.floor(a/100))*12 + (b%100-a%100);
+  const out = [];
+  let mk = forecastStartMk;
+  for(let p=0;p<periodsAhead;p++){
+    const x = (n-1) + monthDiff(lastCompleteMk, mk);
+    const yhat = slope*x+intercept;
+    out.push({mk, label:monthLabelSynthetic(mk), forecast:Math.max(0,yhat), lo:Math.max(0,yhat-1.28*rmse), hi:yhat+1.28*rmse});
+    mk = nextMonthKey(mk);
+  }
+  return out;
+}
+function monthLabelSynthetic(mk){
+  const names=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const yy = Math.floor(mk/100), mo = mk%100;
+  return names[mo-1]+' '+String(yy).slice(2);
+}
+
+/* ================================================================
+   Priority Actions — categorized action tiles (pattern borrowed
+   from the Retail Intelligence OS reference)
+   ================================================================ */
+function buildPriorityActions(){
+  const cr = centreRanking();
+  const csatRows = getFilteredCSAT();
+  const csatByCentre = groupSum(csatRows.map(r=>({centre:r.centre, revenue:r.value, gp:0, txns:1})), r=>r.centre);
+  const networkAvgAts = safeDiv(cr.reduce((s,r)=>s+r.ats,0), cr.length||1);
+  const revGrowth = centreGrowthMap(2);
+  const scores = computePerformanceScores();
+
+  const actions = [];
+
+  const lowGP = cr.filter(c=>c.revenue>50000 && c.gpPct<15);
+  actions.push({tag:'MARGIN', title:'Improve GP Margin', stat:`${lowGP.length} centre${lowGP.length===1?'':'s'} below 15% GP`, level: lowGP.length?'bad':'good'});
+
+  const lowCsat = [...csatByCentre.entries()].filter(([k,v])=>v.revenue/v.txns<75);
+  actions.push({tag:'SATISFACTION', title:'Lift CSAT', stat:`${lowCsat.length} centre${lowCsat.length===1?'':'s'} below 75% CSAT`, level: lowCsat.length?'warn':'good'});
+
+  const lowProd = cr.filter(c=>c.ats < networkAvgAts*0.6);
+  actions.push({tag:'EXECUTION', title:'Improve Productivity', stat:`${lowProd.length} centre${lowProd.length===1?'':'s'} well below network avg ATS`, level: lowProd.length?'warn':'good'});
+
+  const bottom10 = [...cr].sort((a,b)=>a.revenue-b.revenue).slice(0,10);
+  const bottom10Rev = bottom10.reduce((s,c)=>s+c.revenue,0);
+  actions.push({tag:'RECOVERY', title:'Recover Bottom Centres', stat:`Bottom 10 represent ${fmtINR(bottom10Rev)}`, level:'warn'});
+
+  const declining = cr.filter(c=>revGrowth[c.name]!==undefined && revGrowth[c.name] < -10);
+  actions.push({tag:'GROWTH', title:'Address Declining Centres', stat:`${declining.length} centre${declining.length===1?'':'s'} down >10% MoM`, level: declining.length?'bad':'good'});
+
+  const excellent = scores.filter(s=>s.bucket==='Excellent');
+  actions.push({tag:'EXCELLENCE', title:'Coach & Replicate', stat:`${excellent.length} Excellent-rated centre${excellent.length===1?'':'s'} to replicate`, level:'good'});
+
+  return actions;
+}
+function renderPriorityActions(){
+  const actions = buildPriorityActions();
+  const wrap = el('div',{class:'panel', style:'margin-bottom:20px;'});
+  wrap.appendChild(el('h3',{}, 'Priority Actions'));
+  const grid = el('div',{style:'display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;'});
+  const colorFor = {bad:'var(--bad)', warn:'var(--warn)', good:'var(--good)'};
+  actions.forEach(a=>{
+    grid.appendChild(el('div',{style:`background:var(--panel-2);border:1px solid var(--border-soft);border-left:3px solid ${colorFor[a.level]};border-radius:8px;padding:12px 14px;`},[
+      el('div',{style:'font-size:9.5px;letter-spacing:.6px;color:var(--text-faint);text-transform:uppercase;margin-bottom:4px;'}, a.tag),
+      el('div',{style:'font-size:13px;font-weight:600;margin-bottom:4px;'}, a.title),
+      el('div',{style:'font-size:11.5px;color:var(--text-dim);'}, a.stat),
+    ]));
+  });
+  wrap.appendChild(grid);
+  return wrap;
+}
+
+/* Executive Commentary — bulleted narrative with ✓/! icons */
+function buildExecutiveCommentary(){
+  const g = kpiGrowthContext();
+  const totals = getExactRangeTotals();
+  const sr = stateRanking();
+  const cr = centreRanking();
+  const csatRows = getFilteredCSAT();
+  const avgCsat = csatRows.length? csatRows.reduce((s,r)=>s+r.value,0)/csatRows.length : null;
+  const bullets = [];
+
+  if(g.revMoM!==null){
+    bullets.push({bad: g.revMoM<0, text:`Revenue ${g.revMoM>=0?'grew':'declined'} ${fmtPct(g.revMoM)} month-on-month to ${fmtINR(totals.revenue)}.`});
+  }
+  bullets.push({bad: totals.gpPct<20, text:`GP margin stands at ${totals.gpPct.toFixed(1)}%${g.gpMoM!==null?' ('+fmtPct(g.gpMoM)+' MoM)':''}.`});
+  if(avgCsat!==null) bullets.push({bad: avgCsat<80, text:`Average CSAT is ${avgCsat.toFixed(0)}% across reporting centres.`});
+  if(sr.length>=2) bullets.push({bad:false, text:`Top region: ${sr[0].name} (${fmtINR(sr[0].revenue)}); weakest: ${sr[sr.length-1].name} (${fmtINR(sr[sr.length-1].revenue)}).`});
+  if(cr.length>=5){
+    const top5Share = safeDiv(cr.slice(0,5).reduce((s,c)=>s+c.revenue,0), totals.revenue)*100;
+    bullets.push({bad:false, text:`Top 5 centres contribute ${top5Share.toFixed(0)}% of revenue.`});
+  }
+  return bullets;
+}
+function renderExecutiveCommentary(){
+  const bullets = buildExecutiveCommentary();
+  const wrap = el('div',{class:'panel', style:'margin-bottom:20px;'});
+  wrap.appendChild(el('h3',{}, 'Executive Commentary'));
+  const list = el('div',{style:'display:flex;flex-direction:column;gap:7px;'});
+  bullets.forEach(b=>{
+    list.appendChild(el('div',{style:'display:flex;gap:8px;font-size:12.5px;color:var(--text-dim);line-height:1.5;'},[
+      el('span',{style:'color:'+(b.bad?'var(--bad)':'var(--good)')}, b.bad?'!':'✓'),
+      el('span',{}, b.text),
+    ]));
+  });
+  wrap.appendChild(list);
+  return wrap;
+}
+
+/* Source QA — data reconciliation transparency panel */
+function renderSourceQA(){
+  const totalCentres = CENTRES.length;
+  const unmapped = CENTRES.filter(c=>c.State==='Unmapped').length;
+  const status = gpCoverageStatus();
+  const gpNote = status==='full' ? 'Spare Parts Incentives coverage complete for the selected period.'
+    : status==='partial' ? 'Spare Parts Incentives partially cover the selected period — remaining months use transaction GP only.'
+    : 'Spare Parts Incentives do not cover the selected period — figures use transaction GP only.';
+  const csatCentreCount = new Set(CSAT.map(r=>r[1])).size;
+
+  const wrap = el('div',{class:'panel', style:'margin-bottom:20px;'});
+  wrap.appendChild(el('h3',{}, 'Source QA'));
+  const list = el('div',{style:'display:flex;flex-direction:column;gap:6px;font-size:11.5px;color:var(--text-faint);'});
+  [
+    `${totalCentres} centres loaded from Location Master${unmapped?`; ${unmapped} not mapped to a State (flagged "Unmapped")`:''}.`,
+    gpNote,
+    `CSAT sourced for ${csatCentreCount} centres from the CSAT sheet.`,
+    `Revenue and GP reconcile to the raw transaction sheets (cancelled transactions excluded).`,
+  ].forEach(t=>list.appendChild(el('div',{}, '• '+t)));
+  wrap.appendChild(list);
+  return wrap;
+}
+
+function renderExec(){
+  const v = document.getElementById('view-exec');
+  v.innerHTML='';
+  const cav = gpCaveatBanner();
+  if(cav) v.appendChild(cav);
+
+  const totals = getExactRangeTotals();
+  const g = kpiGrowthContext();
+  const csatRows = getFilteredCSAT();
+  const avgCsat = csatRows.length? csatRows.reduce((s,r)=>s+r.value,0)/csatRows.length : null;
+
+  const summaryPanel = el('div',{class:'hero-card'},[
+    el('div',{class:'eyebrow'}, 'AI Executive Summary'),
+    el('p',{}, buildExecutiveSummary()),
+  ]);
+  v.appendChild(summaryPanel);
+  v.appendChild(renderExecutiveCommentary());
+
+  const kpis = el('div',{class:'kpi-grid'},[
+    richKpiCard({label:'Revenue', value:fmtINR(totals.revenue), mom:g.revMoM, qoq:g.revQoQ, yoy:g.revYoY, spark:g.spark}),
+    ...(GP_VISIBLE ? [
+      richKpiCard({label:'Gross Profit', value:fmtINR(totals.gp), mom:g.gpMoM, qoq:g.gpQoQ, yoy:g.gpYoY, spark:g.sparkGP}),
+      richKpiCard({label:'GP %', value:totals.gpPct===null?'—':totals.gpPct.toFixed(1)+'%'}),
+    ] : []),
+    richKpiCard({label:'Transactions', value:fmtNum(totals.txns)}),
+    richKpiCard({label:'Avg Ticket Size', value:fmtINR(totals.ats)}),
+    richKpiCard({label:'Avg CSAT', value:avgCsat!==null? avgCsat.toFixed(0)+'%':'—'}),
+  ]);
+  v.appendChild(kpis);
+
+  v.appendChild(renderPriorityActions());
+  v.appendChild(renderExecutiveAlerts());
+
+  const series = withYoY(withMoM(monthlySeries()));
+  const trendPanel = panel('Revenue & GP Trend', MONTHS.length+' months', el('div',{class:'chart-wrap', style:'height:280px;'}, el('canvas',{id:'execTrend'})));
+  const mixData = (()=>{
+    const bu = getFilteredBURows();
+    const map = groupSum(bu, r=>r.bu);
+    const arr = [...map.entries()].map(([k,v])=>({name:k,revenue:v.revenue})).sort((a,b)=>b.revenue-a.revenue).slice(0,8);
+    return arr;
+  })();
+  const mixPanel = panel('Revenue Mix by Business Unit', null, el('div',{class:'chart-wrap', style:'height:280px;'}, el('canvas',{id:'execMix'})));
+
+  const g2 = el('div',{class:'grid2'},[trendPanel, mixPanel]);
+  v.appendChild(g2);
+
+  // top/bottom centres this period
+  const cr = centreRanking();
+  const top5 = cr.slice(0,5);
+  const bottom5 = [...cr].sort((a,b)=>a.revenue-b.revenue).slice(0,5);
+  const maxRev = cr.length? cr[0].revenue : 1;
+
+  const topPanel = panel('Top 5 Centres by Revenue', null, dataTable({
+    columns:[
+      {key:'rank', label:'#', render:r=>el('td',{}, el('span',{class:'rank-badge top'}, r.rank))},
+      {key:'name', label:'Centre'},
+      {key:'revenue', label:'Revenue', render:r=>numCell(r.revenue)},
+      {key:'gpPct', label:'GP%', render:r=>el('td',{class:'num'}, r.gpPct.toFixed(1)+'%')},
+    ],
+    rows: top5,
+    onRowClick: r=>{state.centre=r.name; onFilterChange();}
+  }));
+  const bottomPanel = panel('Bottom 5 Centres by Revenue', null, dataTable({
+    columns:[
+      {key:'rank', label:'#', render:r=>el('td',{}, el('span',{class:'rank-badge bottom'}, r.rank))},
+      {key:'name', label:'Centre'},
+      {key:'revenue', label:'Revenue', render:r=>numCell(r.revenue)},
+      {key:'gpPct', label:'GP%', render:r=>el('td',{class:'num'}, r.gpPct.toFixed(1)+'%')},
+    ],
+    rows: bottom5,
+    onRowClick: r=>{state.centre=r.name; onFilterChange();}
+  }));
+  v.appendChild(el('div',{class:'grid2'},[topPanel, bottomPanel]));
+
+  v.appendChild(renderSourceQA());
+
+  requestAnimationFrame(()=>{
+    lineChart('execTrend', series.map(s=>s.label), [
+      {label:'Revenue', data:series.map(s=>s.revenue), borderColor:'#3aa0ff', backgroundColor:'rgba(58,160,255,.08)', fill:true, tension:.3, pointRadius:0, yAxisID:'y'},
+      {label:'Gross Profit', data:series.map(s=>s.gp), borderColor:'#22d3a8', backgroundColor:'rgba(34,211,168,.08)', fill:true, tension:.3, pointRadius:0, yAxisID:'y'},
+    ]);
+    doughnutChart('execMix', mixData.map(d=>d.name), mixData.map(d=>d.revenue), PALETTE);
+  });
+
+  currentExporter = {filename:'executive_overview.csv', columns:[
+    {key:'name',label:'Centre'},{key:'revenue',label:'Revenue'},{key:'gp',label:'GP'},{key:'gpPct',label:'GP%'}
+  ], rows: cr};
+}
+
+/* ================================================================
+   VIEW: Revenue Analytics
+   ================================================================ */
+function renderRevenue(){
+  const v = document.getElementById('view-revenue');
+  v.innerHTML='';
+  const series = monthlySeries();
+  const totals = getExactRangeTotals();
+
+  v.appendChild(el('div',{class:'kpi-grid'},[
+    kpiCard('Total Revenue', fmtINR(totals.revenue)),
+    kpiCard('Avg Monthly Revenue', fmtINR(safeDiv(totals.revenue, series.length||1))),
+    kpiCard('Avg Ticket Size', fmtINR(totals.ats)),
+    kpiCard('Transactions', fmtNum(totals.txns)),
+  ]));
+
+  const trend = panel('Monthly Revenue Trend', null, el('div',{class:'chart-wrap', style:'height:280px;'}, el('canvas',{id:'revTrend'})));
+
+  // revenue by category (top 10)
+  const catRows = getFilteredCatRows();
+  const catMap = groupSum(catRows, r=>r.category);
+  const catArr = [...catMap.entries()].map(([k,v])=>({name:k,...v})).sort((a,b)=>b.revenue-a.revenue).slice(0,10);
+  const catPanel = panel('Revenue by Category (Top 10)', null, el('div',{class:'chart-wrap', style:'height:280px;'}, el('canvas',{id:'revCat'})));
+
+  v.appendChild(el('div',{class:'grid2'},[trend, catPanel]));
+
+  // revenue by item (top 10) + txn type
+  const itemRows = getFilteredItemRows();
+  const itemMap = groupSum(itemRows, r=>r.item);
+  const itemArr = [...itemMap.entries()].map(([k,v])=>({name:k,...v})).sort((a,b)=>b.revenue-a.revenue).slice(0,10);
+  const itemPanel = panel('Top Items by Revenue', 'by Item Name', dataTable({
+    columns:[
+      {key:'name',label:'Item Name'},
+      {key:'revenue',label:'Revenue', render:r=>numCell(r.revenue)},
+      {key:'txns',label:'Txns', render:r=>numCell(r.txns, fmtNum)},
+    ], rows: itemArr
+  }));
+
+  const ttRows = getFilteredTxnTypeRows();
+  const ttMap = groupSum(ttRows, r=>r.type);
+  const ttArr = [...ttMap.entries()].map(([k,v])=>({name:k,...v}));
+  const ttPanel = panel('Revenue by Transaction Type', null, el('div',{class:'chart-wrap', style:'height:220px;'}, el('canvas',{id:'revTxnType'})));
+
+  v.appendChild(el('div',{class:'grid2'},[itemPanel, ttPanel]));
+
+  // revenue contribution table by centre
+  const cr = centreRanking();
+  const totalRev = totals.revenue || 1;
+  const crPanel = panel('Revenue Contribution by Centre', cr.length+' centres', dataTable({
+    id:'revContrib',
+    columns:[
+      {key:'rank', label:'#', render:r=>el('td',{}, r.rank)},
+      {key:'name', label:'Centre'},
+      {key:'revenue', label:'Revenue', render:r=>numCell(r.revenue)},
+      {key:'contrib', label:'Contribution %', render:r=>el('td',{class:'num'}, (safeDiv(r.revenue,totalRev)*100).toFixed(1)+'%')},
+    ],
+    rows: applySorting('revContrib', cr, 'revenue'),
+    onRowClick: r=>{state.centre=r.name; onFilterChange();}
+  }));
+  v.appendChild(crPanel);
+
+  requestAnimationFrame(()=>{
+    lineChart('revTrend', series.map(s=>s.label), [
+      {label:'Revenue', data:series.map(s=>s.revenue), borderColor:'#3aa0ff', backgroundColor:'rgba(58,160,255,.1)', fill:true, tension:.3, pointRadius:0},
+    ]);
+    barChart('revCat', catArr.map(c=>c.name), [{label:'Revenue', data:catArr.map(c=>c.revenue), backgroundColor:'#3aa0ff', borderRadius:4}], {indexAxis:'y'});
+    doughnutChart('revTxnType', ttArr.map(t=>t.name), ttArr.map(t=>t.revenue), PALETTE);
+  });
+
+  currentExporter = {filename:'revenue_by_centre.csv', columns:[
+    {key:'name',label:'Centre'},{key:'revenue',label:'Revenue'}
+  ], rows: cr};
+}
+
+/* ================================================================
+   VIEW: Gross Profit Analytics
+   ================================================================ */
+function renderGP(){
+  const v = document.getElementById('view-gp');
+  v.innerHTML='';
+  const cav = gpCaveatBanner();
+  if(cav) v.appendChild(cav);
+  const series = monthlySeries();
+  const totals = getExactRangeTotals();
+
+  v.appendChild(el('div',{class:'kpi-grid'},[
+    kpiCard('Total Gross Profit', fmtINR(totals.gp)),
+    kpiCard('Repair GP', fmtINR(totals.gpRepair)),
+    kpiCard('Spare Parts Incentives', fmtINR(totals.gpIncentive)),
+    kpiCard('GP %', totals.gpPct.toFixed(1)+'%'),
+    kpiCard('Avg Monthly GP', fmtINR(safeDiv(totals.gp, series.length||1))),
+    kpiCard('Revenue (ref)', fmtINR(totals.revenue)),
+  ]));
+
+  const compPanel = panel('GP Composition — Repair vs Spare Parts Incentives', null,
+    el('div',{class:'chart-wrap', style:'height:240px;'}, el('canvas',{id:'gpComposition'})));
+  v.appendChild(compPanel);
+
+  const trend = panel('Monthly GP & GP% Trend', null, el('div',{class:'chart-wrap', style:'height:280px;'}, el('canvas',{id:'gpTrend'})));
+
+  const catRows = getFilteredCatRows();
+  const catMap = groupSum(catRows, r=>r.category);
+  const catArr = [...catMap.entries()].map(([k,v])=>({name:k,...v,gpPct:safeDiv(v.gp,v.revenue)*100})).sort((a,b)=>b.gp-a.gp).slice(0,10);
+  const catPanel = panel('GP by Category (Top 10)', null, el('div',{class:'chart-wrap', style:'height:280px;'}, el('canvas',{id:'gpCat'})));
+  v.appendChild(el('div',{class:'grid2'},[trend, catPanel]));
+
+  const cr = centreRanking();
+  const gpSorted = [...cr].sort((a,b)=>b.gpPct-a.gpPct);
+  const bestGP = gpSorted.slice(0,5);
+  const worstGP = [...gpSorted].reverse().slice(0,5);
+
+  const bestPanel = panel('Highest GP% Centres', null, dataTable({
+    columns:[
+      {key:'name', label:'Centre'},
+      {key:'gpPct', label:'GP%', render:r=>el('td',{class:'num pct-up'}, r.gpPct.toFixed(1)+'%')},
+      {key:'gp', label:'GP', render:r=>numCell(r.gp)},
+    ], rows: bestGP, onRowClick:r=>{state.centre=r.name; onFilterChange();}
+  }));
+  const worstPanel = panel('Lowest GP% Centres', null, dataTable({
+    columns:[
+      {key:'name', label:'Centre'},
+      {key:'gpPct', label:'GP%', render:r=>el('td',{class:'num pct-down'}, r.gpPct.toFixed(1)+'%')},
+      {key:'gp', label:'GP', render:r=>numCell(r.gp)},
+    ], rows: worstGP, onRowClick:r=>{state.centre=r.name; onFilterChange();}
+  }));
+  v.appendChild(el('div',{class:'grid2'},[bestPanel, worstPanel]));
+
+  requestAnimationFrame(()=>{
+    barChart('gpComposition', series.map(s=>s.label), [
+      {label:'Repair GP', data:series.map(s=>s.gpRepair), backgroundColor:'#3aa0ff', borderRadius:3},
+      {label:'Spare Parts Incentives', data:series.map(s=>s.gpIncentive), backgroundColor:'#e8b74e', borderRadius:3},
+    ], {scales:{
+      x:{stacked:true, ticks:{color:'#8991a3', font:{size:10}}, grid:{display:false}},
+      y:{stacked:true, ticks:{color:'#8991a3', font:{size:10}}, grid:{color:'#edf0f5'}}
+    }});
+    lineChart('gpTrend', series.map(s=>s.label), [
+      {label:'GP', data:series.map(s=>s.gp), borderColor:'#22d3a8', backgroundColor:'rgba(34,211,168,.1)', fill:true, tension:.3, pointRadius:0, yAxisID:'y'},
+      {label:'GP %', data:series.map(s=>s.gpPct), borderColor:'#e8b74e', pointRadius:0, tension:.3, yAxisID:'y1'},
+    ], {scales:{y:{position:'left', ticks:{color:'#8991a3'}, grid:{color:'#edf0f5'}}, y1:{position:'right', ticks:{color:'#8991a3'}, grid:{display:false}}}});
+    barChart('gpCat', catArr.map(c=>c.name), [{label:'GP', data:catArr.map(c=>c.gp), backgroundColor:'#22d3a8', borderRadius:4}], {indexAxis:'y'});
+  });
+
+  currentExporter = {filename:'gp_by_centre.csv', columns:[
+    {key:'name',label:'Centre'},{key:'gp',label:'GP'},{key:'gpPct',label:'GP%'}
+  ], rows: cr};
+}
+
+/* ================================================================
+   VIEW: CSAT Analytics
+   ================================================================ */
+function renderCSAT(){
+  const v = document.getElementById('view-csat');
+  v.innerHTML='';
+  const rows = getFilteredCSAT();
+  if(!rows.length){
+    v.appendChild(el('div',{class:'empty-state'}, 'No CSAT data for the current filter selection.'));
+    currentExporter = null;
+    return;
+  }
+  const avg = rows.reduce((s,r)=>s+r.value,0)/rows.length;
+  const byMonth = groupSum(rows.map(r=>({mk:r.mk, revenue:r.value, gp:0, txns:1})), r=>r.mk);
+  const mks = [...byMonth.keys()].sort((a,b)=>a-b);
+  const series = mks.map(mk=>({mk, label:monthLabel(mk), value: byMonth.get(mk).revenue/byMonth.get(mk).txns}));
+
+  const byCentre = groupSum(rows.map(r=>({centre:r.centre, revenue:r.value, gp:0, txns:1})), r=>r.centre);
+  const centreArr = [...byCentre.entries()].map(([k,v])=>({name:k, value:v.revenue/v.txns})).sort((a,b)=>b.value-a.value);
+  const best = centreArr.slice(0,5);
+  const worst = [...centreArr].reverse().slice(0,5);
+
+  v.appendChild(el('div',{class:'kpi-grid'},[
+    kpiCard('Average CSAT', avg.toFixed(0)+'%'),
+    kpiCard('Centres Reporting', centreArr.length),
+    kpiCard('Best Centre', best[0]?best[0].name:'—'),
+    kpiCard('Needs Attention', worst[0]?worst[0].name:'—'),
+  ]));
+
+  const trend = panel('CSAT Trend', null, el('div',{class:'chart-wrap', style:'height:280px;'}, el('canvas',{id:'csatTrend'})));
+  const dist = panel('CSAT by Centre', null, el('div',{class:'chart-wrap', style:'height:280px;'}, el('canvas',{id:'csatCentre'})));
+  v.appendChild(el('div',{class:'grid2'},[trend, dist]));
+
+  const bestPanel = panel('Top 5 CSAT Centres', null, dataTable({
+    columns:[{key:'name',label:'Centre'},{key:'value',label:'CSAT', render:r=>el('td',{class:'num pct-up'}, r.value.toFixed(0)+'%')}],
+    rows: best, onRowClick:r=>{state.centre=r.name; onFilterChange();}
+  }));
+  const worstPanel = panel('Bottom 5 CSAT Centres', null, dataTable({
+    columns:[{key:'name',label:'Centre'},{key:'value',label:'CSAT', render:r=>el('td',{class:'num pct-down'}, r.value.toFixed(0)+'%')}],
+    rows: worst, onRowClick:r=>{state.centre=r.name; onFilterChange();}
+  }));
+  v.appendChild(el('div',{class:'grid2'},[bestPanel, worstPanel]));
+
+  requestAnimationFrame(()=>{
+    lineChart('csatTrend', series.map(s=>s.label), [
+      {label:'CSAT %', data:series.map(s=>s.value), borderColor:'#e8b74e', backgroundColor:'rgba(232,183,78,.1)', fill:true, tension:.3, pointRadius:0},
+    ]);
+    barChart('csatCentre', centreArr.slice(0,15).map(c=>c.name), [{label:'CSAT %', data:centreArr.slice(0,15).map(c=>c.value), backgroundColor: centreArr.slice(0,15).map(c=>c.value>=90?'#22d3a8':c.value>=75?'#e8b74e':'#f2555a'), borderRadius:4}], {indexAxis:'y'});
+  });
+
+  currentExporter = {filename:'csat_by_centre.csv', columns:[{key:'name',label:'Centre'},{key:'value',label:'CSAT'}], rows: centreArr};
+}
+
+/* ================================================================
+   VIEW: Centre Performance
+   ================================================================ */
+/* ================================================================
+   VIEW: Targets — Target vs Achievement
+   ================================================================ */
+function buildProjectionCard(){
+  const p = computeLiveProjection();
+  const label = mkToLabel(p.mk);
+
+  if(p.noData){
+    return el('div',{class:'proj-card'},[
+      el('div',{class:'eyebrow'}, 'Live Projection — '+label),
+      el('div',{class:'proj-sub'}, 'No transactions recorded yet for '+label+' in this view — the projection will appear here once this month\'s data starts coming in.'),
+    ]);
+  }
+
+  const statusClass = p.projectedAchPct===null ? '' : p.projectedAchPct>=100?'proj-good':p.projectedAchPct>=85?'proj-warn':'proj-bad';
+  const paceText = p.paceVsExpected===null ? null :
+    (p.paceVsExpected>=0
+      ? `Running ${Math.abs(p.paceVsExpected).toFixed(1)}% ahead of expected pace so far`
+      : `Running ${Math.abs(p.paceVsExpected).toFixed(1)}% behind expected pace so far`);
+
+  return el('div',{class:'proj-card '+statusClass},[
+    el('div',{class:'eyebrow'}, 'Live Projection — '+label),
+    el('div',{class:'proj-main'},[
+      el('div',{},[
+        el('div',{class:'proj-big'}, fmtINR(p.projected)),
+        el('div',{class:'proj-big-label'}, 'Projected month-end revenue'),
+      ]),
+      p.target>0 ? el('div',{},[
+        el('span',{class:'proj-pill'}, (p.projectedAchPct!==null?p.projectedAchPct.toFixed(0):'—')+'% of target'),
+      ]) : null,
+    ]),
+    el('div',{class:'proj-sub'}, [
+      `Revenue to date: ${fmtINR(p.revenueSoFar)}${p.target>0?` · Expected by today: ${fmtINR(p.expectedToDate)}`:''}`,
+      paceText ? el('br') : null,
+      paceText || '',
+    ]),
+    el('div',{class:'proj-foot'}, `Based on ${p.elapsedWD} of ${p.totalWD} working days this month — Sundays excluded, centres are closed.`),
+  ]);
+}
+
+function buildSuggestedTargetsPanel(){
+  const {targetMonth, seasonalIndex, fullFYCount, idxTarget, rows, lowVolumeRows} = computeSuggestedTargets();
+  if(!targetMonth || (!rows.length && !lowVolumeRows.length)){
+    return panel('Suggested Targets', null, el('p',{style:'color:var(--text-faint);font-size:12.5px;'}, 'Not enough history yet to suggest targets for this scope.'));
+  }
+  const monthNames=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const note = el('div',{class:'suggest-note'}, [
+    el('b',{}, 'How this is calculated: '),
+    `each full centre's last 3 months are de-seasonalized (divided by their own calendar month's seasonal index) and averaged into an underlying trend level. That trend is then multiplied by `,
+    el('b',{}, monthNames[targetMonth%100]+"'s seasonal index"),
+    ` and a damped recent YoY growth rate (half-weighted, capped, so a temporary spike doesn't get fully extrapolated). Seasonal indices come only from `,
+    el('b',{}, fullFYCount+' complete fiscal year'+(fullFYCount!==1?'s':'')),
+    ` of established Service Centres — Repair Drop Off Locations and centres with under 6 months of history are excluded from that baseline and get a simpler, unadjusted 3-month average below instead (see why in that section). Suggested target for `,
+    el('b',{}, mkToLabel(targetMonth)),
+    `. Nothing here writes back to your workbook automatically — copy whichever numbers you're comfortable with into the Revenue Target sheet.`,
+  ]);
+
+  const seasonBar = el('div',{style:'display:flex;gap:2px;margin:12px 0 14px 0;'},
+    [1,2,3,4,5,6,7,8,9,10,11,12].map(cm=>{
+      const idx = seasonalIndex[cm];
+      const pct = ((idx-1)*100);
+      const isTarget = cm===(targetMonth%100);
+      const height = 8+Math.abs(pct)*1.6;
+      const color = pct>=0 ? 'var(--good)' : 'var(--bad)';
+      return el('div',{style:'flex:1;text-align:center;', title:monthNames[cm]+': '+(pct>=0?'+':'')+pct.toFixed(1)+'%'},[
+        el('div',{style:`height:${height}px;background:${color};border-radius:3px;opacity:${isTarget?1:0.45};`}),
+        el('div',{style:`font-size:9.5px;margin-top:4px;color:${isTarget?'var(--accent)':'var(--text-faint)'};font-weight:${isTarget?700:400};`}, monthNames[cm]),
+      ]);
+    })
+  );
+
+  const totalRow = {
+    centre: 'All full centres in view',
+    trendBase: rows.reduce((s,r)=>s+(r.trendBase||0),0),
+    dampedGrowth: null,
+    suggested: rows.reduce((s,r)=>s+(r.suggested||0),0),
+    existingTarget: rows.some(r=>r.existingTarget!==null) ? rows.reduce((s,r)=>s+(r.existingTarget||0),0) : null,
+  };
+  const mainTable = rows.length ? dataTable({
+    columns:[
+      {key:'centre', label:'Centre'},
+      {key:'trendBase', label:'De-seasonalized Trend', render:r=>numCell(r.trendBase)},
+      {key:'dampedGrowth', label:'Growth Applied', render:r=>el('td',{class:'num'}, r.dampedGrowth!==null? fmtPct(r.dampedGrowth*100) : '—')},
+      {key:'suggested', label:'Suggested Target', render:r=>el('td',{class:'num'}, r.suggested!==null? el('b',{}, fmtINR(r.suggested)) : '—')},
+      {key:'existingTarget', label:'Currently Set', render:r=>numCell(r.existingTarget)},
+    ],
+    rows: [totalRow, ...rows],
+  }) : el('p',{style:'color:var(--text-faint);font-size:12.5px;'}, 'No established centres in this view.');
+
+  const children = [note, seasonBar, mainTable];
+
+  if(lowVolumeRows.length){
+    const lvNote = el('div',{class:'suggest-note'}, [
+      el('b',{}, 'Drop-off locations & early-stage centres: '),
+      `these run at low, often sporadic volume — some months near zero — so seasonality and growth-rate math would mostly be modelling noise, not real demand patterns. `,
+      `Shown here as a plain 3-month average instead, with no adjustment. Treat as a rough baseline, not a firm target.`,
+    ]);
+    const lvTable = dataTable({
+      columns:[
+        {key:'centre', label:'Location'},
+        {key:'locationType', label:'Type'},
+        {key:'monthsWithData', label:'Months of Data', render:r=>el('td',{class:'num'}, String(r.monthsWithData))},
+        {key:'simpleAvg', label:'3-Month Avg', render:r=>numCell(r.simpleAvg)},
+        {key:'existingTarget', label:'Currently Set', render:r=>numCell(r.existingTarget)},
+      ],
+      rows: lowVolumeRows,
+    });
+    children.push(el('div',{style:'margin-top:22px;'},[
+      el('div',{style:'font-weight:700;font-size:13.5px;margin-bottom:10px;color:var(--text);'}, 'Drop-off & Early-Stage Locations'),
+      lvNote, lvTable,
+    ]));
+  }
+
+  return panel(`Suggested Targets — ${mkToLabel(targetMonth)}`, rows.length+' established centre'+(rows.length!==1?'s':'')+(lowVolumeRows.length?', '+lowVolumeRows.length+' drop-off/early-stage':''), el('div',{}, children));
+}
+
+function renderTargets(){
+  const v = document.getElementById('view-targets');
+  v.innerHTML='';
+
+  // Live projection is independent of whether targets are loaded at all —
+  // it's useful the moment there's any revenue data for the current month.
+  v.appendChild(buildProjectionCard());
+
+  if(!hasAnyTargets()){
+    v.appendChild(el('div',{class:'insight-card neutral'},[
+      el('div',{class:'ihead'},[el('span',{class:'icon'},'◉'), el('span',{class:'ititle'},'No targets loaded yet')]),
+      el('p',{}, 'Add "Revenue Target", "GP Target", "CSAT Target", and/or "License Target" sheets to your master workbook (same Branch ID × Month layout as the template) and rebuild the dashboard — Target vs Achievement will appear here automatically.'),
+    ]));
+    currentExporter = null;
+    return;
+  }
+
+  const actualRows = getFilteredMonthRows();
+  const actualByCM = {}; actualRows.forEach(r=>{ actualByCM[r.mk+'|'+r.centre] = {revenue:r.revenue, gp:r.gp}; });
+  const revTargets = getFilteredTarget(TARGET_REVENUE);
+  const gpTargets = getFilteredTarget(TARGET_GP);
+  const csatTargets = getFilteredTarget(TARGET_CSAT);
+  const licenseTargets = getFilteredTarget(TARGET_LICENSES);
+  const licenseRows = getFilteredLicenseRows();
+
+  const sumTarget = (arr)=> arr.reduce((s,r)=>s+r.value,0);
+  const totalRevTarget = sumTarget(revTargets);
+  const totalGpTarget = sumTarget(gpTargets);
+  const totalLicenseTarget = sumTarget(licenseTargets);
+  const totalLicensesSold = licenseRows.reduce((s,r)=>s+r.txns,0);
+  const totals = getExactRangeTotals();
+  const csatRows = getFilteredCSAT();
+  const avgCsat = csatRows.length? csatRows.reduce((s,r)=>s+r.value,0)/csatRows.length : null;
+  const avgCsatTarget = csatTargets.length? csatTargets.reduce((s,r)=>s+r.value,0)/csatTargets.length : null;
+
+  const achPct = (actual,target)=> target>0? safeDiv(actual,target)*100 : null;
+
+  v.appendChild(el('div',{class:'kpi-grid'},[
+    kpiCard('Revenue Actual', fmtINR(totals.revenue)),
+    kpiCard('Revenue Target', totalRevTarget>0?fmtINR(totalRevTarget):'—'),
+    kpiCard('Revenue Achievement', achPct(totals.revenue,totalRevTarget)!==null? achPct(totals.revenue,totalRevTarget).toFixed(0)+'%':'—', null, deltaDir((achPct(totals.revenue,totalRevTarget)||0)-100)),
+    kpiCard('GP Achievement', achPct(totals.gp,totalGpTarget)!==null? achPct(totals.gp,totalGpTarget).toFixed(0)+'%':'—', null, deltaDir((achPct(totals.gp,totalGpTarget)||0)-100)),
+    kpiCard('CSAT Actual vs Target', avgCsat!==null? avgCsat.toFixed(0)+'%'+(avgCsatTarget?' / '+avgCsatTarget.toFixed(0)+'%':'') : '—'),
+    kpiCard('Licenses Sold', fmtNum(totalLicensesSold)),
+    kpiCard('License Achievement', achPct(totalLicensesSold,totalLicenseTarget)!==null? achPct(totalLicensesSold,totalLicenseTarget).toFixed(0)+'%':'—', null, deltaDir((achPct(totalLicensesSold,totalLicenseTarget)||0)-100)),
+  ]));
+
+  // Monthly actual vs target trend (revenue)
+  const revTargetByMk = {};
+  revTargets.forEach(r=>{ revTargetByMk[r.mk] = (revTargetByMk[r.mk]||0) + r.value; });
+  const series = monthlySeries();
+  const trendPanel = panel('Revenue: Actual vs Target', null, el('div',{class:'chart-wrap', style:'height:280px;'}, el('canvas',{id:'targetTrend'})));
+
+  // Centre-level target vs achievement table
+  const centreTargetMap = {}; // centre -> {revActual, revTarget, gpActual, gpTarget, licenseActual, licenseTarget}
+  const blankCentreRow = ()=>({revActual:0,revTarget:0,gpActual:0,gpTarget:0,licenseActual:0,licenseTarget:0});
+  revTargets.forEach(r=>{
+    if(!centreTargetMap[r.centre]) centreTargetMap[r.centre]=blankCentreRow();
+    centreTargetMap[r.centre].revTarget += r.value;
+  });
+  gpTargets.forEach(r=>{
+    if(!centreTargetMap[r.centre]) centreTargetMap[r.centre]=blankCentreRow();
+    centreTargetMap[r.centre].gpTarget += r.value;
+  });
+  licenseTargets.forEach(r=>{
+    if(!centreTargetMap[r.centre]) centreTargetMap[r.centre]=blankCentreRow();
+    centreTargetMap[r.centre].licenseTarget += r.value;
+  });
+  actualRows.forEach(r=>{
+    if(!centreTargetMap[r.centre]) return; // only show centres that have a target set
+    centreTargetMap[r.centre].revActual += r.revenue;
+    centreTargetMap[r.centre].gpActual += r.gp;
+  });
+  licenseRows.forEach(r=>{
+    if(!centreTargetMap[r.centre]) return; // only show centres that have a target set
+    centreTargetMap[r.centre].licenseActual += r.txns;
+  });
+
+  // Projected columns always reflect the current real-world month's
+  // run-rate for each centre — same working-day-aware math as the Live
+  // Projection card — regardless of whatever broader period the table
+  // above is filtered to. A single pass over FACT_DAY here, rather than
+  // one scan per centre, keeps this cheap even with many centres.
+  const projCtx = (()=>{
+    const now = new Date();
+    const y=now.getFullYear(), m=now.getMonth()+1, d=now.getDate();
+    const mk = y*100+m;
+    const monthPrefix = `${y}-${String(m).padStart(2,'0')}`;
+    const todayStr = `${monthPrefix}-${String(d).padStart(2,'0')}`;
+    const totalWD = workingDaysInMonth(mk);
+    const elapsedWD = workingDaysElapsed(mk, d);
+    const byCentre = {};
+    for(const [ds,c,rev] of FACT_DAY){
+      if(!ds.startsWith(monthPrefix) || ds>todayStr) continue;
+      byCentre[c] = (byCentre[c]||0) + rev;
+    }
+    return {mk, totalWD, elapsedWD, byCentre};
+  })();
+  function projectionFor(centre){
+    const soFar = projCtx.byCentre[centre];
+    if(soFar===undefined || projCtx.elapsedWD===0) return {projected:null, projectedPct:null};
+    const projected = (soFar/projCtx.elapsedWD) * projCtx.totalWD;
+    const target = getTargetForMonthCentre(TARGET_REVENUE, projCtx.mk, centre);
+    const projectedPct = target>0 ? safeDiv(projected,target)*100 : null;
+    return {projected, projectedPct};
+  }
+
+  const centreRows = Object.entries(centreTargetMap).map(([name,v])=>({
+    name, ...v,
+    revAch: achPct(v.revActual, v.revTarget),
+    gpAch: achPct(v.gpActual, v.gpTarget),
+    licenseAch: achPct(v.licenseActual, v.licenseTarget),
+    ...projectionFor(name),
+  })).sort((a,b)=>(b.revAch||0)-(a.revAch||0));
+
+  const tableCaption = el('div',{style:'font-size:11.5px;color:var(--text-faint);margin-bottom:10px;'},
+    `Revenue Projected columns reflect ${mkToLabel(projCtx.mk)}'s run-rate so far (${projCtx.elapsedWD} of ${projCtx.totalWD} working days elapsed) regardless of the date range filtered above. License columns are unit counts, not revenue.`);
+
+  const tablePanel = panel('Centre-Level Target vs Achievement', centreRows.length+' centres with targets set', el('div',{},[
+    tableCaption,
+    dataTable({
+      columns:[
+        {key:'name', label:'Centre'},
+        {key:'revTarget', label:'Revenue Target', render:r=>numCell(r.revTarget)},
+        {key:'revActual', label:'Revenue Actual', render:r=>numCell(r.revActual)},
+        {key:'revAch', label:'Revenue Achievement %', render:r=>el('td',{class:'num'}, r.revAch!==null? el('span',{class:'pill '+(r.revAch>=100?'good':r.revAch>=80?'warn':'bad')}, r.revAch.toFixed(0)+'%') : '—')},
+        {key:'projected', label:'Revenue Projected', render:r=>numCell(r.projected)},
+        {key:'projectedPct', label:'Revenue Projected %', render:r=>el('td',{class:'num'}, r.projectedPct!==null? el('span',{class:'pill '+(r.projectedPct>=100?'good':r.projectedPct>=80?'warn':'bad')}, r.projectedPct.toFixed(0)+'%') : '—')},
+        {key:'gpActual', label:'GP Actual', render:r=>numCell(r.gpActual)},
+        {key:'gpTarget', label:'GP Target', render:r=>numCell(r.gpTarget)},
+        {key:'gpAch', label:'GP Achievement', render:r=>el('td',{class:'num'}, r.gpAch!==null? el('span',{class:'pill '+(r.gpAch>=100?'good':r.gpAch>=80?'warn':'bad')}, r.gpAch.toFixed(0)+'%') : '—')},
+        {key:'licenseTarget', label:'Licenses Target (units)', render:r=>el('td',{class:'num'}, r.licenseTarget>0?fmtNum(r.licenseTarget):'—')},
+        {key:'licenseActual', label:'Licenses Sold (units)', render:r=>el('td',{class:'num'}, fmtNum(r.licenseActual))},
+        {key:'licenseAch', label:'License Achievement', render:r=>el('td',{class:'num'}, r.licenseAch!==null? el('span',{class:'pill '+(r.licenseAch>=100?'good':r.licenseAch>=80?'warn':'bad')}, r.licenseAch.toFixed(0)+'%') : '—')},
+      ],
+      rows: centreRows,
+      onRowClick: r=>{state.centre=r.name; onFilterChange();}
+    })
+  ]));
+
+  v.appendChild(trendPanel);
+  v.appendChild(tablePanel);
+  v.appendChild(buildSuggestedTargetsPanel());
+
+  requestAnimationFrame(()=>{
+    lineChart('targetTrend', series.map(s=>s.label), [
+      {label:'Actual Revenue', data:series.map(s=>s.revenue), borderColor:'#3aa0ff', pointRadius:0, tension:.2},
+      {label:'Target Revenue', data:series.map(s=>revTargetByMk[s.mk]||null), borderColor:'#d97706', borderDash:[5,4], pointRadius:2, tension:.2, spanGaps:false},
+    ]);
+  });
+
+  currentExporter = {filename:'target_vs_achievement.csv', columns:[
+    {key:'name',label:'Centre'},{key:'revActual',label:'Revenue Actual'},{key:'revTarget',label:'Revenue Target'},
+    {key:'revAch',label:'Revenue Achievement %'},{key:'gpActual',label:'GP Actual'},{key:'gpTarget',label:'GP Target'},{key:'gpAch',label:'GP Achievement %'}
+  ], rows: centreRows};
+}
+
+function renderCentre(){
+  const v = document.getElementById('view-centre');
+  v.innerHTML='';
+  const cr = centreRanking();
+  const maxRev = cr.length? cr[0].revenue : 1;
+  const networkAvgRev = safeDiv(cr.reduce((s,r)=>s+r.revenue,0), cr.length||1);
+  const networkAvgGpPct = cr.reduce((s,r)=>s+r.gpPct,0)/(cr.length||1);
+  const scores = computePerformanceScores();
+  const scoreMap = {}; scores.forEach(s=>scoreMap[s.name]=s);
+
+  v.appendChild(el('div',{class:'kpi-grid'},[
+    kpiCard('Centres Active', cr.length),
+    kpiCard('Avg Revenue / Centre', fmtINR(networkAvgRev)),
+    kpiCard('Top Centre', cr[0]?cr[0].name:'—'),
+    kpiCard('Avg GP%', networkAvgGpPct.toFixed(1)+'%'),
+  ]));
+
+  const tableId = 'centrePerf';
+  const merged = cr.map(c=>({...c, score:scoreMap[c.name]?scoreMap[c.name].score:null, bucket:scoreMap[c.name]?scoreMap[c.name].bucket:'—', bucketClass:scoreMap[c.name]?scoreMap[c.name].bucketClass:'flat',
+    vsNetworkRev: safeDiv(c.revenue-networkAvgRev, networkAvgRev)*100}));
+  const sorted = applySorting(tableId, merged, 'revenue');
+  const tablePanel = panel('Centre Performance', cr.length+' centres — click a row to drill in', dataTable({
+    id: tableId,
+    columns:[
+      {key:'rank', label:'#', render:r=>el('td',{}, el('span',{class:'rank-badge '+(r.rank<=3?'top':r.rank>cr.length-3?'bottom':'')}, r.rank))},
+      {key:'name', label:'Centre'},
+      {key:'state', label:'State'},
+      {key:'arm', label:'ARM'},
+      {key:'type', label:'Type', render:r=>el('td',{}, el('span',{class:'pill '+(r.type==='Service Centre'?'type-svc':'type-drop')}, r.type||'—'))},
+      {key:'revenue', label:'Revenue', render:r=>numCell(r.revenue)},
+      {key:'vsNetworkRev', label:'vs Network Avg', render:r=>pctCell(r.vsNetworkRev)},
+      {key:'gp', label:'GP', render:r=>numCell(r.gp)},
+      {key:'gpPct', label:'GP%', render:r=>el('td',{class:'num'}, r.gpPct.toFixed(1)+'%')},
+      {key:'txns', label:'Txns', render:r=>numCell(r.txns, fmtNum)},
+      {key:'ats', label:'ATS', render:r=>numCell(r.ats)},
+      {key:'score', label:'Score', render:r=>el('td',{class:'num'}, r.score!==null? el('span',{class:'pill '+r.bucketClass}, r.score+' · '+r.bucket) : '—')},
+      {key:'bar', label:'Share', render:r=>barCell(r.revenue, maxRev)},
+    ],
+    rows: sorted,
+    onRowClick: r=>{state.centre=r.name; onFilterChange();}
+  }));
+  v.appendChild(tablePanel);
+
+  currentExporter = {filename:'centre_performance.csv', columns:[
+    {key:'name',label:'Centre'},{key:'state',label:'State'},{key:'arm',label:'ARM'},
+    {key:'revenue',label:'Revenue'},{key:'gp',label:'GP'},{key:'gpPct',label:'GP%'},{key:'txns',label:'Txns'},
+    {key:'score',label:'Performance Score'},{key:'bucket',label:'Bucket'}
+  ], rows: sorted};
+}
+
+/* ================================================================
+   VIEW: State Performance
+   ================================================================ */
+/* ================================================================
+   VIEW: Centre Explorer — entity picker + score profile + action
+   (pattern borrowed from the Retail Intelligence OS reference)
+   ================================================================ */
+let explorerState = {centre:null, arm:null};
+
+function renderCentreExplorer(){
+  const v = document.getElementById('view-centreexplorer');
+  v.innerHTML='';
+  const cr = centreRanking();
+  if(!cr.length){ v.appendChild(el('div',{class:'empty-state'},'No centre data for the current filter selection.')); currentExporter=null; return; }
+  if(!explorerState.centre || !cr.find(c=>c.name===explorerState.centre)) explorerState.centre = cr[0].name;
+
+  const picker = el('select',{onchange:e=>{explorerState.centre=e.target.value; renderAll();}});
+  cr.forEach(c=>picker.appendChild(el('option',{value:c.name}, c.name)));
+  picker.value = explorerState.centre;
+  v.appendChild(el('div',{class:'panel', style:'margin-bottom:16px;'},
+    el('div',{class:'fchip', style:'display:inline-flex;'},[
+      el('span',{class:'fchip-label'},'Centre'), picker
+    ])
+  ));
+
+  const c = cr.find(x=>x.name===explorerState.centre);
+  const scores = computePerformanceScores();
+  const scoreObj = scores.find(s=>s.name===c.name);
+
+  v.appendChild(el('div',{class:'kpi-grid'},[
+    kpiCard('Revenue', fmtINR(c.revenue)),
+    kpiCard('Gross Profit', fmtINR(c.gp)),
+    kpiCard('GP %', c.gpPct.toFixed(1)+'%'),
+    kpiCard('Transactions', fmtNum(c.txns)),
+    kpiCard('Avg Ticket Size', fmtINR(c.ats)),
+    kpiCard('Performance Score', scoreObj? scoreObj.score+' · '+scoreObj.bucket : '—'),
+  ]));
+
+  if(scoreObj){
+    const factors = [
+      {label:'Revenue Growth (MoM)', val: scoreObj.revGrowth},
+      {label:'GP Growth (MoM)', val: scoreObj.gpGrowth},
+      {label:'GP Margin', val: scoreObj.gpMargin},
+      {label:'CSAT', val: scoreObj.csat},
+    ];
+    v.appendChild(panel('Score Profile', 'weighted: Rev Growth 25% · GP Growth 25% · GP Margin 15% · CSAT 20% · Productivity 15%',
+      el('div',{style:'display:flex;flex-direction:column;gap:12px;'},
+        factors.map(f=>el('div',{},[
+          el('div',{style:'display:flex;justify-content:space-between;font-size:11.5px;color:var(--text-dim);margin-bottom:4px;'},[
+            el('span',{}, f.label), el('span',{}, f.val.toFixed(1)+'%')
+          ]),
+          el('div',{class:'bar-track'}, el('div',{class:'bar-fill', style:'width:'+Math.min(100,Math.max(2,f.val))+'%'}))
+        ]))
+      )
+    ));
+  }
+
+  const rows = FACT_MONTH.filter(r=>r[1]===c.name && monthInRange(r[0])).map(([mk,cc,rev,gp])=>({mk,label:monthLabel(mk),revenue:rev,gp})).sort((a,b)=>a.mk-b.mk);
+  v.appendChild(panel('Revenue & GP Trend — '+c.name, null, el('div',{class:'chart-wrap', style:'height:260px;'}, el('canvas',{id:'explorerCentreTrend'}))));
+
+  let action = 'Performing within normal bounds — maintain current execution.';
+  if(scoreObj){
+    if(scoreObj.gpMargin<15) action = 'GP margin is critically low — review pricing, parts sourcing, and discount approvals at this centre.';
+    else if(scoreObj.csat<75) action = 'CSAT is below threshold — audit recent service quality and turnaround time.';
+    else if(scoreObj.revGrowth<-10) action = 'Revenue is declining sharply — investigate footfall, competitive activity, and staffing.';
+    else if(scoreObj.bucket==='Excellent') action = "Top-tier performance — document this centre's playbook for replication elsewhere.";
+  }
+  v.appendChild(el('div',{class:'insight-card neutral'},[
+    el('div',{class:'ihead'},[el('span',{class:'icon'},'→'), el('span',{class:'ititle'},'Recommended Action')]),
+    el('p',{}, action),
+  ]));
+
+  requestAnimationFrame(()=>{
+    lineChart('explorerCentreTrend', rows.map(s=>s.label), [
+      {label:'Revenue', data:rows.map(s=>s.revenue), borderColor:'#3aa0ff', pointRadius:2, tension:.3},
+      {label:'GP', data:rows.map(s=>s.gp), borderColor:'#22d3a8', pointRadius:2, tension:.3},
+    ]);
+  });
+
+  currentExporter = {filename:'centre_explorer_'+c.name.replace(/\s+/g,'_')+'.csv', columns:[
+    {key:'label',label:'Month'},{key:'revenue',label:'Revenue'},{key:'gp',label:'GP'}
+  ], rows: rows};
+}
+
+/* ================================================================
+   VIEW: ARM Explorer
+   ================================================================ */
+function renderArmExplorer(){
+  const v = document.getElementById('view-armexplorer');
+  v.innerHTML='';
+  const ar = armRanking();
+  if(!ar.length){ v.appendChild(el('div',{class:'empty-state'},'No ARM data for the current filter selection.')); currentExporter=null; return; }
+  if(!explorerState.arm || !ar.find(a=>a.key===explorerState.arm)) explorerState.arm = ar[0].key;
+
+  const picker = el('select',{onchange:e=>{explorerState.arm=e.target.value; renderAll();}});
+  ar.forEach(a=>picker.appendChild(el('option',{value:a.key}, a.key)));
+  picker.value = explorerState.arm;
+  v.appendChild(el('div',{class:'panel', style:'margin-bottom:16px;'},
+    el('div',{class:'fchip', style:'display:inline-flex;'},[
+      el('span',{class:'fchip-label'},'ARM'), picker
+    ])
+  ));
+
+  const a = ar.find(x=>x.key===explorerState.arm);
+  const centresUnderArm = CENTRES.filter(c=>c.ARM===a.key).map(c=>c.Centre);
+  const cr = centreRanking().filter(c=>centresUnderArm.includes(c.name)).sort((x,y)=>y.revenue-x.revenue);
+
+  v.appendChild(el('div',{class:'kpi-grid'},[
+    kpiCard('Revenue', fmtINR(a.revenue)),
+    kpiCard('Gross Profit', fmtINR(a.gp)),
+    kpiCard('GP %', a.gpPct.toFixed(1)+'%'),
+    kpiCard('Transactions', fmtNum(a.txns)),
+    kpiCard('Centres Under ARM', centresUnderArm.length),
+    kpiCard('Avg Revenue / Centre', fmtINR(safeDiv(a.revenue, centresUnderArm.length||1))),
+  ]));
+
+  const maxRev = cr.length? cr[0].revenue : 1;
+  v.appendChild(panel('Centres Under '+a.key, cr.length+' centres', dataTable({
+    columns:[
+      {key:'name',label:'Centre'},
+      {key:'revenue',label:'Revenue', render:r=>numCell(r.revenue)},
+      {key:'gpPct',label:'GP%', render:r=>el('td',{class:'num'}, r.gpPct.toFixed(1)+'%')},
+      {key:'bar',label:'Share', render:r=>barCell(r.revenue,maxRev)},
+    ], rows: cr,
+    onRowClick: r=>{state.centre=r.name; onFilterChange(); activeTab='exec'; buildTabs(); renderAll();}
+  })));
+
+  const rows = FACT_MONTH.filter(r=>centresUnderArm.includes(r[1]) && monthInRange(r[0]));
+  const mmap = groupSum(rows.map(([mk,c,rev,gp,tx])=>({mk,revenue:rev,gp,txns:tx})), r=>r.mk);
+  const mks=[...mmap.keys()].sort((x,y)=>x-y);
+  const series = mks.map(mk=>({mk,label:monthLabel(mk),...mmap.get(mk)}));
+  v.appendChild(panel('Revenue & GP Trend — '+a.key, null, el('div',{class:'chart-wrap', style:'height:260px;'}, el('canvas',{id:'explorerArmTrend'}))));
+
+  const avgCentreRev = safeDiv(cr.reduce((s,x)=>s+x.revenue,0), cr.length||1);
+  let action = 'Performing within normal bounds.';
+  if(a.gpPct<15) action = "GP margin across this ARM's centres is critically low — review pricing and discounting practices network-wide.";
+  else if(cr.length && cr.every(c=>c.revenue < avgCentreRev*1.3)) action = 'Revenue is evenly (and modestly) spread — consider whether any centre under this ARM could be a breakout growth focus.';
+  v.appendChild(el('div',{class:'insight-card neutral'},[
+    el('div',{class:'ihead'},[el('span',{class:'icon'},'→'), el('span',{class:'ititle'},'Recommended Action')]),
+    el('p',{}, action),
+  ]));
+
+  requestAnimationFrame(()=>{
+    lineChart('explorerArmTrend', series.map(s=>s.label), [
+      {label:'Revenue', data:series.map(s=>s.revenue), borderColor:'#3aa0ff', pointRadius:2, tension:.3},
+      {label:'GP', data:series.map(s=>s.gp), borderColor:'#22d3a8', pointRadius:2, tension:.3},
+    ]);
+  });
+
+  currentExporter = {filename:'arm_explorer_'+a.key.replace(/\s+/g,'_')+'.csv', columns:[
+    {key:'name',label:'Centre'},{key:'revenue',label:'Revenue'},{key:'gpPct',label:'GP%'}
+  ], rows: cr};
+}
+
+/* ================================================================
+   VIEW: State Performance
+   ================================================================ */
+function renderStatePerf(){
+  const v = document.getElementById('view-stateperf');
+  v.innerHTML='';
+  const sr = stateRanking();
+  const maxRev = sr.length? sr[0].revenue : 1;
+
+  v.appendChild(el('div',{class:'kpi-grid'},[
+    kpiCard('States Active', sr.length),
+    kpiCard('Top State', sr[0]?sr[0].name:'—'),
+    kpiCard('Avg GP%', (sr.reduce((s,r)=>s+r.gpPct,0)/(sr.length||1)).toFixed(1)+'%'),
+  ]));
+
+  const chartPanel = panel('Revenue by State', null, el('div',{class:'chart-wrap', style:'height:320px;'}, el('canvas',{id:'stateChart'})));
+  v.appendChild(chartPanel);
+
+  const tableId='statePerf';
+  const sorted = applySorting(tableId, sr, 'revenue');
+  const tablePanel = panel('State Performance', sr.length+' states — click to drill in', dataTable({
+    id: tableId,
+    columns:[
+      {key:'rank', label:'#', render:r=>el('td',{}, el('span',{class:'rank-badge top'}, r.rank))},
+      {key:'name', label:'State'},
+      {key:'revenue', label:'Revenue', render:r=>numCell(r.revenue)},
+      {key:'gp', label:'GP', render:r=>numCell(r.gp)},
+      {key:'gpPct', label:'GP%', render:r=>el('td',{class:'num'}, r.gpPct.toFixed(1)+'%')},
+      {key:'txns', label:'Txns', render:r=>numCell(r.txns, fmtNum)},
+      {key:'bar', label:'Share', render:r=>barCell(r.revenue, maxRev)},
+    ],
+    rows: sorted,
+    onRowClick: r=>{state.state=r.key; onFilterChange();}
+  }));
+  v.appendChild(tablePanel);
+
+  requestAnimationFrame(()=>{
+    barChart('stateChart', sr.map(s=>s.name), [{label:'Revenue', data:sr.map(s=>s.revenue), backgroundColor:'#3aa0ff', borderRadius:4}], {
+      onBarClick:(label)=>{state.state=label; onFilterChange();}
+    });
+  });
+
+  currentExporter = {filename:'state_performance.csv', columns:[
+    {key:'name',label:'State'},{key:'revenue',label:'Revenue'},{key:'gp',label:'GP'},{key:'gpPct',label:'GP%'}
+  ], rows: sorted};
+}
+
+/* ================================================================
+   VIEW: ARM Performance
+   ================================================================ */
+function renderARM(){
+  const v = document.getElementById('view-arm');
+  v.innerHTML='';
+  const ar = armRanking();
+  const maxRev = ar.length? ar[0].revenue : 1;
+
+  v.appendChild(el('div',{class:'kpi-grid'},[
+    kpiCard('ARMs Active', ar.length),
+    kpiCard('Top ARM', ar[0]?ar[0].name:'—'),
+    kpiCard('Avg Revenue / ARM', fmtINR(safeDiv(ar.reduce((s,r)=>s+r.revenue,0), ar.length||1))),
+  ]));
+
+  const tableId='armPerf';
+  const sorted = applySorting(tableId, ar, 'revenue');
+  const tablePanel = panel('ARM Performance', ar.length+' ARMs — click to drill in', dataTable({
+    id: tableId,
+    columns:[
+      {key:'rank', label:'#', render:r=>el('td',{}, el('span',{class:'rank-badge top'}, r.rank))},
+      {key:'name', label:'ARM'},
+      {key:'state', label:'State'},
+      {key:'revenue', label:'Revenue', render:r=>numCell(r.revenue)},
+      {key:'gp', label:'GP', render:r=>numCell(r.gp)},
+      {key:'gpPct', label:'GP%', render:r=>el('td',{class:'num'}, r.gpPct.toFixed(1)+'%')},
+      {key:'txns', label:'Txns', render:r=>numCell(r.txns, fmtNum)},
+      {key:'bar', label:'Share', render:r=>barCell(r.revenue, maxRev)},
+    ],
+    rows: sorted,
+    onRowClick: r=>{state.arm=r.key; onFilterChange();}
+  }));
+  v.appendChild(tablePanel);
+
+  currentExporter = {filename:'arm_performance.csv', columns:[
+    {key:'name',label:'ARM'},{key:'revenue',label:'Revenue'},{key:'gp',label:'GP'},{key:'gpPct',label:'GP%'}
+  ], rows: sorted};
+}
+
+/* ================================================================
+   VIEW: Business Unit Analytics
+   ================================================================ */
+function renderBU(){
+  const v = document.getElementById('view-bu');
+  v.innerHTML='';
+  const rows = getFilteredBURows();
+  const map = groupSum(rows, r=>r.bu);
+  const arr = [...map.entries()].map(([k,v])=>({name:k, ...v, gpPct:safeDiv(v.gp,v.revenue)*100})).sort((a,b)=>b.revenue-a.revenue);
+  const totalRev = arr.reduce((s,r)=>s+r.revenue,0) || 1;
+
+  v.appendChild(el('div',{class:'kpi-grid'},[
+    kpiCard('Business Units', arr.length),
+    kpiCard('Top BU', arr[0]?arr[0].name:'—'),
+    kpiCard('Top BU Share', arr[0]? (safeDiv(arr[0].revenue,totalRev)*100).toFixed(1)+'%':'—'),
+  ]));
+
+  const chartPanel = panel('Revenue by Business Unit', null, el('div',{class:'chart-wrap', style:'height:300px;'}, el('canvas',{id:'buChart'})));
+
+  // BU trend over time for top 5 BUs
+  const top5BU = arr.slice(0,5).map(a=>a.name);
+  const byMonthBU = new Map(); // mk -> {bu:revenue}
+  rows.forEach(r=>{
+    if(!top5BU.includes(r.bu)) return;
+    if(!byMonthBU.has(r.mk)) byMonthBU.set(r.mk, {});
+    const o = byMonthBU.get(r.mk);
+    o[r.bu] = (o[r.bu]||0) + r.revenue;
+  });
+  const mks = [...byMonthBU.keys()].sort((a,b)=>a-b);
+  const trendPanel = panel('Top 5 BU Trend', null, el('div',{class:'chart-wrap', style:'height:300px;'}, el('canvas',{id:'buTrend'})));
+
+  v.appendChild(el('div',{class:'grid2'},[chartPanel, trendPanel]));
+
+  const tableId='buPerf';
+  const sorted = applySorting(tableId, arr, 'revenue');
+  const tablePanel = panel('Business Unit Detail', null, dataTable({
+    id: tableId,
+    columns:[
+      {key:'name', label:'Business Unit'},
+      {key:'revenue', label:'Revenue', render:r=>numCell(r.revenue)},
+      {key:'gp', label:'GP', render:r=>numCell(r.gp)},
+      {key:'gpPct', label:'GP%', render:r=>el('td',{class:'num'}, r.gpPct.toFixed(1)+'%')},
+      {key:'contrib', label:'Rev Contribution', render:r=>el('td',{class:'num'}, (safeDiv(r.revenue,totalRev)*100).toFixed(1)+'%')},
+      {key:'txns', label:'Txns', render:r=>numCell(r.txns, fmtNum)},
+    ],
+    rows: sorted,
+    onRowClick: r=>{state.bu=r.name; onFilterChange();}
+  }));
+  v.appendChild(tablePanel);
+
+  requestAnimationFrame(()=>{
+    barChart('buChart', arr.slice(0,10).map(a=>a.name), [{label:'Revenue', data:arr.slice(0,10).map(a=>a.revenue), backgroundColor:'#3aa0ff', borderRadius:4}], {indexAxis:'y',
+      onBarClick:(label)=>{state.bu=label; onFilterChange();}});
+    lineChart('buTrend', mks.map(mk=>monthLabel(mk)), top5BU.map((bu,i)=>({
+      label:bu, data:mks.map(mk=>(byMonthBU.get(mk)||{})[bu]||0), borderColor:PALETTE[i], pointRadius:0, tension:.3
+    })));
+  });
+
+  currentExporter = {filename:'business_unit_performance.csv', columns:[
+    {key:'name',label:'Business Unit'},{key:'revenue',label:'Revenue'},{key:'gp',label:'GP'},{key:'gpPct',label:'GP%'}
+  ], rows: sorted};
+}
+
+/* ================================================================
+   VIEW: Licenses (dedicated Business Unit KPI, like CSAT/Revenue)
+   ================================================================ */
+function renderLicenses(){
+  const v = document.getElementById('view-licenses');
+  v.innerHTML='';
+  const rows = getFilteredBURows().filter(r=>r.bu==='Licenses');
+  if(!rows.length){
+    v.appendChild(el('div',{class:'empty-state'}, 'No Licenses data for the current filter selection.'));
+    currentExporter = null;
+    return;
+  }
+  const totals = sumRows(rows);
+
+  // monthly series for Licenses only
+  const byMonth = groupSum(rows, r=>r.mk);
+  const mks = [...byMonth.keys()].sort((a,b)=>a-b);
+  let series = mks.map(mk=>({mk, label:monthLabel(mk), ...byMonth.get(mk), gpPct:safeDiv(byMonth.get(mk).gp,byMonth.get(mk).revenue)*100}));
+  series = withYoY(withMoM(series));
+  // Unit-based growth (licenses sold), computed alongside the shared
+  // revenue-based mom/yoy above rather than replacing it globally — other
+  // tabs reuse withMoM/withYoY for revenue, so this stays local to
+  // Licenses, where the operational metric being driven is unit count,
+  // not revenue.
+  series = series.map(r=>{
+    const prev = series.find(s=>s.mk===prevMonthKey(r.mk));
+    const yearAgo = series.find(s=>s.mk===r.mk-100);
+    const momUnits = (prev && prev.txns>0 && !isCurrentRealMonth(r.mk)) ? safeDiv(r.txns-prev.txns, prev.txns)*100 : null;
+    const yoyUnits = (yearAgo && yearAgo.txns>0 && !isCurrentRealMonth(r.mk)) ? safeDiv(r.txns-yearAgo.txns, yearAgo.txns)*100 : null;
+    return {...r, momUnits, yoyUnits};
+  });
+  const lastCompleteLic = [...series].reverse().find(r=>!isCurrentRealMonth(r.mk)) || null;
+  const last = lastCompleteLic;
+
+  const licenseTargetTotal = getFilteredTarget(TARGET_LICENSES).reduce((s,r)=>s+r.value,0);
+  const licenseAchPct = licenseTargetTotal>0 ? safeDiv(totals.txns, licenseTargetTotal)*100 : null;
+
+  v.appendChild(el('div',{class:'kpi-grid'},[
+    kpiCard('License Revenue', fmtINR(totals.revenue)),
+    kpiCard('License GP', fmtINR(totals.gp)),
+    kpiCard('License GP %', totals.gpPct.toFixed(1)+'%'),
+    kpiCard('Licenses Sold (units)', fmtNum(totals.txns)),
+    kpiCard('Licenses Target (units)', licenseTargetTotal>0?fmtNum(licenseTargetTotal):'—'),
+    kpiCard('License Achievement', licenseAchPct!==null? licenseAchPct.toFixed(0)+'%':'—', null, deltaDir((licenseAchPct||0)-100)),
+    kpiCard('Latest MoM Growth (Units)', last&&last.momUnits!==null?fmtPct(last.momUnits):'—', null, last?deltaDir(last.momUnits):'flat'),
+    kpiCard('Latest YoY Growth (Units)', last&&last.yoyUnits!==null?fmtPct(last.yoyUnits):'—', null, last?deltaDir(last.yoyUnits):'flat'),
+  ]));
+
+  const trendPanel = panel('License Revenue Trend', null, el('div',{class:'chart-wrap', style:'height:280px;'}, el('canvas',{id:'licTrend'})));
+  const centreRows = groupSum(rows, r=>r.centre);
+  const centreArr = [...centreRows.entries()].map(([k,v])=>({name:k, ...v, gpPct:safeDiv(v.gp,v.revenue)*100})).sort((a,b)=>b.revenue-a.revenue);
+  const centrePanel = panel('License Revenue by Centre', null, el('div',{class:'chart-wrap', style:'height:280px;'}, el('canvas',{id:'licCentre'})));
+  v.appendChild(el('div',{class:'grid2'},[trendPanel, centrePanel]));
+
+  const tableId = 'licTable';
+  const sorted = applySorting(tableId, centreArr, 'revenue');
+  v.appendChild(panel('License Performance by Centre', centreArr.length+' centres', dataTable({
+    id: tableId,
+    columns:[
+      {key:'name', label:'Centre'},
+      {key:'revenue', label:'Revenue', render:r=>numCell(r.revenue)},
+      {key:'gp', label:'GP', render:r=>numCell(r.gp)},
+      {key:'gpPct', label:'GP%', render:r=>el('td',{class:'num'}, r.gpPct.toFixed(1)+'%')},
+      {key:'txns', label:'Licenses Sold (units)', render:r=>numCell(r.txns, fmtNum)},
+    ],
+    rows: sorted,
+    onRowClick: r=>{state.centre=r.name; onFilterChange();}
+  })));
+
+  const growthTablePanel = panel('Monthly License Growth', 'measured by units sold, not revenue', dataTable({
+    columns:[
+      {key:'label', label:'Month'},
+      {key:'txns', label:'Licenses Sold (units)', render:r=>numCell(r.txns, fmtNum)},
+      {key:'revenue', label:'Revenue (ref)', render:r=>numCell(r.revenue)},
+      {key:'momUnits', label:'MoM % (Units)', render:r=>pctCell(r.momUnits)},
+      {key:'yoyUnits', label:'YoY % (Units)', render:r=>pctCell(r.yoyUnits)},
+    ],
+    rows: series
+  }));
+  v.appendChild(growthTablePanel);
+
+  requestAnimationFrame(()=>{
+    lineChart('licTrend', series.map(s=>s.label), [
+      {label:'License Revenue', data:series.map(s=>s.revenue), borderColor:'#a78bfa', backgroundColor:'rgba(167,139,250,.1)', fill:true, tension:.3, pointRadius:0},
+    ]);
+    barChart('licCentre', centreArr.slice(0,15).map(c=>c.name), [{label:'Revenue', data:centreArr.slice(0,15).map(c=>c.revenue), backgroundColor:'#a78bfa', borderRadius:4}], {indexAxis:'y'});
+  });
+
+  currentExporter = {filename:'licenses_by_centre.csv', columns:[
+    {key:'name',label:'Centre'},{key:'revenue',label:'Revenue'},{key:'gp',label:'GP'},{key:'gpPct',label:'GP%'}
+  ], rows: sorted};
+}
+
+/* ================================================================
+   VIEW: Growth Dashboard (MoM / QoQ / YoY)
+   ================================================================ */
+function renderGrowth(){
+  const v = document.getElementById('view-growth');
+  v.innerHTML='';
+  const cav = gpCaveatBanner();
+  if(cav) v.appendChild(cav);
+  let series = monthlySeries();
+  series = rolling3(runningTotals(withYoY(withMoM(series))));
+  const q = quarterlySeries().map((r,i,arr)=>{
+    const prev = arr[i-1];
+    const qoq = prev? safeDiv(r.revenue-prev.revenue, prev.revenue)*100 : null;
+    return {...r, qoq};
+  });
+
+  const lastComplete = lastCompleteRow(series);
+  const lastMoM = lastComplete? lastComplete.mom : null;
+  const lastYoY = lastComplete? lastComplete.yoy : null;
+  const now = new Date();
+  const curRealMk = now.getFullYear()*100 + (now.getMonth()+1);
+  const curRealFYQ = MONTH_MAP[curRealMk]?.FYQ;
+  let lastQObj = q[q.length-1];
+  if(lastQObj && curRealFYQ && lastQObj.label===curRealFYQ && q.length>1) lastQObj = q[q.length-2];
+  const lastQoQ = lastQObj? lastQObj.qoq : null;
+
+  v.appendChild(el('div',{class:'kpi-grid'},[
+    kpiCard('Latest MoM Growth', lastMoM!==null?fmtPct(lastMoM):'—', null, deltaDir(lastMoM)),
+    kpiCard('Latest QoQ Growth', lastQoQ!==null?fmtPct(lastQoQ):'—', null, deltaDir(lastQoQ)),
+    kpiCard('Latest YoY Growth', lastYoY!==null?fmtPct(lastYoY):'—', null, deltaDir(lastYoY)),
+    kpiCard('Running Total Revenue', fmtINR(series.length?series[series.length-1].running:0)),
+  ]));
+
+  const momPanel = panel('Month-on-Month Growth %', null, el('div',{class:'chart-wrap', style:'height:260px;'}, el('canvas',{id:'momChart'})));
+  const yoyPanel = panel('Year-on-Year Growth %', null, el('div',{class:'chart-wrap', style:'height:260px;'}, el('canvas',{id:'yoyChart'})));
+  v.appendChild(el('div',{class:'grid2'},[momPanel, yoyPanel]));
+
+  const qoqPanel = panel('Quarter-on-Quarter Growth %', null, el('div',{class:'chart-wrap', style:'height:260px;'}, el('canvas',{id:'qoqChart'})));
+  const rollPanel = panel('Revenue: Actual vs Rolling 3-Month Average', null, el('div',{class:'chart-wrap', style:'height:260px;'}, el('canvas',{id:'rollChart'})));
+  v.appendChild(el('div',{class:'grid2'},[qoqPanel, rollPanel]));
+
+  const tableId='growthTable';
+  const tRows = applySorting(tableId, series, 'mk');
+  const tablePanel = panel('Monthly Growth Detail', null, dataTable({
+    id: tableId,
+    columns:[
+      {key:'label', label:'Month'},
+      {key:'revenue', label:'Revenue', render:r=>numCell(r.revenue)},
+      {key:'mom', label:'MoM %', render:r=>pctCell(r.mom)},
+      {key:'yoy', label:'YoY %', render:r=>pctCell(r.yoy)},
+      {key:'running', label:'Running Total', render:r=>numCell(r.running)},
+      {key:'rolling3', label:'Rolling 3M Avg', render:r=>numCell(r.rolling3)},
+    ],
+    rows: tRows
+  }));
+  v.appendChild(tablePanel);
+
+  // Simple forecast — linear trend extrapolation, next 3 months. Fitted
+  // only on complete months (see completeMonthsOnly) so an in-progress
+  // month's partial total can't drag the trend line down.
+  const fc = linearForecast(completeMonthsOnly(series), 3);
+  if(fc.length){
+    const fcPanel = panel('Revenue Forecast (Next 3 Months)', 'Linear trend, ~80% band', el('div',{class:'chart-wrap', style:'height:260px;'}, el('canvas',{id:'forecastChart'})));
+    v.appendChild(fcPanel);
+    const projQuarter = fc.slice(0,3).reduce((s,f)=>s+f.forecast,0);
+    v.appendChild(el('div',{class:'kpi-grid', style:'margin-top:14px;'},[
+      kpiCard('Next Month Forecast', fmtINR(fc[0].forecast)),
+      kpiCard('Projected Next Quarter', fmtINR(projQuarter)),
+      kpiCard('Forecast Range (Next Month)', fmtINR(fc[0].lo)+' – '+fmtINR(fc[0].hi)),
+    ]));
+    requestAnimationFrame(()=>{
+      const allLabels = [...series.map(s=>s.label), ...fc.map(f=>f.label)];
+      const actualData = [...series.map(s=>s.revenue), ...fc.map(()=>null)];
+      const forecastData = [...series.map(()=>null), ...fc.map(f=>f.forecast)];
+      const hiData = [...series.map(()=>null), ...fc.map(f=>f.hi)];
+      const loData = [...series.map(()=>null), ...fc.map(f=>f.lo)];
+      lineChart('forecastChart', allLabels, [
+        {label:'Actual', data:actualData, borderColor:'#3aa0ff', pointRadius:0, tension:.2, spanGaps:false},
+        {label:'Forecast', data:forecastData, borderColor:'#e8b74e', borderDash:[5,4], pointRadius:2, tension:.2, spanGaps:false},
+        {label:'Upper Band', data:hiData, borderColor:'rgba(232,183,78,.25)', pointRadius:0, tension:.2, spanGaps:false},
+        {label:'Lower Band', data:loData, borderColor:'rgba(232,183,78,.25)', pointRadius:0, tension:.2, spanGaps:false},
+      ]);
+    });
+  }
+
+  requestAnimationFrame(()=>{
+    barChart('momChart', series.map(s=>s.label), [{label:'MoM %', data:series.map(s=>s.mom), backgroundColor: series.map(s=>s.mom>=0?'#22d3a8':'#f2555a'), borderRadius:4}]);
+    barChart('yoyChart', series.map(s=>s.label), [{label:'YoY %', data:series.map(s=>s.yoy), backgroundColor: series.map(s=>(s.yoy||0)>=0?'#22d3a8':'#f2555a'), borderRadius:4}]);
+    barChart('qoqChart', q.map(s=>s.label), [{label:'QoQ %', data:q.map(s=>s.qoq), backgroundColor: q.map(s=>(s.qoq||0)>=0?'#22d3a8':'#f2555a'), borderRadius:4}]);
+    lineChart('rollChart', series.map(s=>s.label), [
+      {label:'Actual Revenue', data:series.map(s=>s.revenue), borderColor:'#3aa0ff', pointRadius:0, tension:.2},
+      {label:'Rolling 3M Avg', data:series.map(s=>s.rolling3), borderColor:'#e8b74e', pointRadius:0, borderDash:[5,4], tension:.2},
+    ]);
+  });
+
+  currentExporter = {filename:'growth_detail.csv', columns:[
+    {key:'label',label:'Month'},{key:'revenue',label:'Revenue'},{key:'mom',label:'MoM%'},{key:'yoy',label:'YoY%'},{key:'running',label:'Running Total'}
+  ], rows: tRows};
+}
+
+/* ================================================================
+   VIEW: Exceptions — automatic red/yellow/green flags
+   ================================================================ */
+function renderExceptions(){
+  const v = document.getElementById('view-exceptions');
+  v.innerHTML='';
+  const cr = centreRanking();
+  const revGrowth = centreGrowthMap(2);
+  const gpGrowth = centreGrowthMap(3);
+  const csatRows = getFilteredCSAT();
+  const csatByCentre = groupSum(csatRows.map(r=>({centre:r.centre, revenue:r.value, gp:0, txns:1})), r=>r.centre);
+  const networkAvgAts = safeDiv(cr.reduce((s,r)=>s+r.ats,0), cr.length||1);
+
+  const rows = cr.map(c=>{
+    const rg = revGrowth[c.name], gg = gpGrowth[c.name];
+    const csatObj = csatByCentre.get(c.name);
+    const csatVal = csatObj? csatObj.revenue/csatObj.txns : null;
+    const flags = [];
+    if(rg!==undefined && rg < -10) flags.push({level:'bad', text:`Revenue drop >10% (${fmtPct(rg)})`});
+    if(c.gpPct < 15) flags.push({level:'bad', text:`GP margin below 15% (${c.gpPct.toFixed(1)}%)`});
+    if(csatVal!==null && csatVal < 75) flags.push({level:'warn', text:`CSAT below target (${csatVal.toFixed(0)}%)`});
+    if(rg!==undefined && gg!==undefined && rg>2 && gg<0) flags.push({level:'warn', text:'Revenue growing but GP falling'});
+    if(rg!==undefined && gg!==undefined && gg>2 && rg<0) flags.push({level:'good', text:'GP growing despite revenue decline'});
+    if(c.ats < networkAvgAts*0.6) flags.push({level:'warn', text:'Low productivity (ATS well below network average)'});
+    const worst = flags.some(f=>f.level==='bad') ? 'bad' : flags.some(f=>f.level==='warn') ? 'warn' : 'good';
+    return {...c, flags, worst, revGrowth:rg, gpGrowth:gg, csat:csatVal};
+  }).filter(r=>r.flags.length>0);
+  rows.sort((a,b)=>{ const order={bad:0,warn:1,good:2}; return order[a.worst]-order[b.worst]; });
+
+  const counts = {bad: rows.filter(r=>r.worst==='bad').length, warn: rows.filter(r=>r.worst==='warn').length, good: rows.filter(r=>r.worst==='good').length};
+  v.appendChild(el('div',{class:'kpi-grid'},[
+    kpiCard('Critical (Red)', counts.bad),
+    kpiCard('Caution (Yellow)', counts.warn),
+    kpiCard('Positive Flags (Green)', counts.good),
+    kpiCard('Centres Flagged', rows.length+' of '+cr.length),
+  ]));
+
+  if(!rows.length){
+    v.appendChild(el('div',{class:'empty-state'},'No exceptions detected for the current filter selection — all centres within normal bounds.'));
+    currentExporter = null;
+    return;
+  }
+
+  const dotColor = {bad:'var(--bad)', warn:'var(--warn)', good:'var(--good)'};
+  rows.forEach(r=>{
+    const card = el('div',{class:'insight-card '+(r.worst==='bad'?'warn':r.worst==='warn'?'neutral':'good'), style:'cursor:pointer;', onclick:()=>{state.centre=r.name; onFilterChange(); activeTab='exec'; buildTabs(); renderAll();}},[
+      el('div',{class:'ihead'},[
+        el('span',{style:`display:inline-block;width:9px;height:9px;border-radius:50%;background:${dotColor[r.worst]};`}),
+        el('span',{class:'ititle'}, r.name+' · '+(r.state||'—')),
+      ]),
+      ...r.flags.map(f=>el('p',{}, (f.level==='bad'?'🔴 ':f.level==='warn'?'🟡 ':'🟢 ')+f.text)),
+    ]);
+    v.appendChild(card);
+  });
+
+  currentExporter = {filename:'exceptions.csv', columns:[
+    {key:'name',label:'Centre'},{key:'state',label:'State'},{key:'worst',label:'Severity'},
+    {key:'revGrowth',label:'Revenue Growth %'},{key:'gpPct',label:'GP%'},{key:'csat',label:'CSAT'}
+  ], rows: rows};
+}
+
+/* ================================================================
+   VIEW: Rankings & Leaderboards
+   ================================================================ */
+function renderRankings(){
+  const v = document.getElementById('view-rankings');
+  v.innerHTML='';
+
+  const cr = centreRanking();
+  const sr = stateRanking();
+  const ar = armRanking();
+  const execRows = getFilteredExecRows();
+  const execMap = groupSum(execRows, r=>r.exec);
+  const execArr = [...execMap.entries()].map(([k,v])=>({name:k,...v})).sort((a,b)=>b.revenue-a.revenue).slice(0,10);
+
+  v.appendChild(el('div',{class:'grid3'},[
+    panel('Centre Leaderboard', null, dataTable({
+      columns:[
+        {key:'rank',label:'#',render:r=>el('td',{},el('span',{class:'rank-badge top'},r.rank))},
+        {key:'name',label:'Centre'},
+        {key:'revenue',label:'Revenue',render:r=>numCell(r.revenue)},
+      ], rows: cr.slice(0,10), onRowClick:r=>{state.centre=r.name; onFilterChange();}
+    })),
+    panel('ARM Leaderboard', null, dataTable({
+      columns:[
+        {key:'rank',label:'#',render:r=>el('td',{},el('span',{class:'rank-badge top'},r.rank))},
+        {key:'name',label:'ARM'},
+        {key:'revenue',label:'Revenue',render:r=>numCell(r.revenue)},
+      ], rows: ar.slice(0,10), onRowClick:r=>{state.arm=r.key; onFilterChange();}
+    })),
+    panel('State Leaderboard', null, dataTable({
+      columns:[
+        {key:'rank',label:'#',render:r=>el('td',{},el('span',{class:'rank-badge top'},r.rank))},
+        {key:'name',label:'State'},
+        {key:'revenue',label:'Revenue',render:r=>numCell(r.revenue)},
+      ], rows: sr.slice(0,10), onRowClick:r=>{state.state=r.key; onFilterChange();}
+    })),
+  ]));
+
+  v.appendChild(panel('Executive Leaderboard (All-Time, within current filters)', 'Top 10 by revenue', dataTable({
+    columns:[
+      {key:'rank', label:'#', render:(r)=>el('td',{}, el('span',{class:'rank-badge top'}, execArr.indexOf(r)+1))},
+      {key:'name', label:'Executive'},
+      {key:'revenue', label:'Revenue', render:r=>numCell(r.revenue)},
+      {key:'gp', label:'GP', render:r=>numCell(r.gp)},
+      {key:'txns', label:'Txns', render:r=>numCell(r.txns, fmtNum)},
+    ], rows: execArr
+  })));
+
+  currentExporter = {filename:'centre_rankings.csv', columns:[
+    {key:'rank',label:'Rank'},{key:'name',label:'Centre'},{key:'revenue',label:'Revenue'}
+  ], rows: cr};
+}
+
+/* ================================================================
+   VIEW: Geographic View
+   ================================================================ */
+function renderGeo(){
+  const v = document.getElementById('view-geo');
+  v.innerHTML='';
+  const sr = stateRanking();
+  const maxRev = sr.length? sr[0].revenue : 1;
+
+  v.appendChild(el('div',{class:'section-sub'}, 'State-level revenue distribution. Bubble size = revenue, colour = GP%. Click a state to drill down.'));
+
+  const gridWrap = el('div',{style:'display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:20px;'});
+  sr.forEach(s=>{
+    const size = 42 + Math.round(safeDiv(s.revenue,maxRev)*50);
+    const color = s.gpPct>=25?'#22d3a8':s.gpPct>=15?'#e8b74e':'#f2555a';
+    const card = el('div',{class:'panel', style:'text-align:center;cursor:pointer;padding:16px 10px;', onclick:()=>{state.state=s.key; onFilterChange();}},[
+      el('div',{style:`width:${size}px;height:${size}px;border-radius:50%;background:${color}22;border:2px solid ${color};margin:0 auto 10px auto;display:flex;align-items:center;justify-content:center;font-size:11px;color:${color};font-weight:700;`}, s.gpPct.toFixed(0)+'%'),
+      el('div',{style:'font-size:12.5px;font-weight:600;'}, s.name),
+      el('div',{style:'font-size:11px;color:var(--text-faint);margin-top:3px;'}, fmtINR(s.revenue)),
+    ]);
+    gridWrap.appendChild(card);
+  });
+  v.appendChild(gridWrap);
+
+  const tableId = 'geoTable';
+  const sorted = applySorting(tableId, sr, 'revenue');
+  v.appendChild(panel('State Detail', null, dataTable({
+    id: tableId,
+    columns:[
+      {key:'rank', label:'#', render:r=>el('td',{}, r.rank)},
+      {key:'name', label:'State'},
+      {key:'revenue', label:'Revenue', render:r=>numCell(r.revenue)},
+      {key:'gpPct', label:'GP%', render:r=>el('td',{class:'num'}, r.gpPct.toFixed(1)+'%')},
+      {key:'txns', label:'Txns', render:r=>numCell(r.txns, fmtNum)},
+      {key:'bar', label:'Share', render:r=>barCell(r.revenue, maxRev)},
+    ], rows: sorted, onRowClick:r=>{state.state=r.key; onFilterChange();}
+  })));
+
+  currentExporter = {filename:'geographic_state_detail.csv', columns:[
+    {key:'name',label:'State'},{key:'revenue',label:'Revenue'},{key:'gpPct',label:'GP%'}
+  ], rows: sorted};
+}
+
+/* ================================================================
+   VIEW: AI Insights (rule-based narrative engine — fully offline)
+   ================================================================ */
+function stdev(arr){
+  const m = arr.reduce((a,b)=>a+b,0)/(arr.length||1);
+  const v = arr.reduce((a,b)=>a+(b-m)*(b-m),0)/(arr.length||1);
+  return Math.sqrt(v);
+}
+
+function buildInsights(){
+  const insights = [];
+  const series = withYoY(withMoM(monthlySeries()));
+  const cr = centreRanking();
+  const sr = stateRanking();
+
+  // 1. Growth / decline headline — based on the last COMPLETE month; an
+  // in-progress month's partial total isn't a fair MoM comparison and
+  // would otherwise produce a misleading "declined 84%" style headline.
+  const last = lastCompleteRow(series);
+  const lastIdx = last ? series.indexOf(last) : -1;
+  if(last && lastIdx>=1){
+    const prevRow = series[lastIdx-1];
+    const dir = (last.mom||0)>=0 ? 'grew' : 'declined';
+    insights.push({
+      type: (last.mom||0)>=0?'good':'warn',
+      icon: (last.mom||0)>=0?'▲':'▼',
+      title: `Revenue ${dir} ${Math.abs(last.mom||0).toFixed(1)}% month-on-month`,
+      body: `${last.label} closed at ${fmtINR(last.revenue)} in revenue with ${fmtINR(last.gp)} gross profit (${last.gpPct.toFixed(1)}% GP), versus ${fmtINR(prevRow.revenue)} the prior month.`,
+      action: (last.mom||0)<0
+        ? `Review the centres driving the decline below and confirm whether it is seasonal, one-off, or a sustained trend before the next review cycle.`
+        : `Sustain momentum by reallocating high-performing playbooks (schemes, upsell scripts) from top centres to mid-tier ones.`
+    });
+  }
+  if(last_yoy_insight(series)) insights.push(last_yoy_insight(series));
+
+  // 2. Top / bottom performer movement (compare first half vs second half of filtered window to spot movers)
+  if(cr.length>=4){
+    const topPerformer = cr[0];
+    const bottomPerformer = cr[cr.length-1];
+    insights.push({
+      type:'neutral', icon:'★',
+      title:`${topPerformer.name} leads all centres`,
+      body:`${topPerformer.name} (${topPerformer.state||'—'}) generated ${fmtINR(topPerformer.revenue)} at ${topPerformer.gpPct.toFixed(1)}% GP — ${(safeDiv(topPerformer.revenue, cr[cr.length-1].revenue)).toFixed(1)}x the revenue of the lowest-performing centre, ${bottomPerformer.name}.`,
+      action:`Consider a peer-learning session pairing ${topPerformer.name}'s manager with the bottom-quartile centres.`
+    });
+  }
+
+  // 3. Outlier detection on centre MoM (using last two months of raw fact table, unfiltered by centre selection to keep it meaningful)
+  const outlier = detectOutlierCentres();
+  if(outlier) insights.push(outlier);
+
+  // 4. Business unit trend
+  const buRows = getFilteredBURows();
+  if(buRows.length){
+    const buMap = groupSum(buRows, r=>r.bu);
+    const buArr = [...buMap.entries()].map(([k,v])=>({name:k,...v, gpPct:safeDiv(v.gp,v.revenue)*100})).sort((a,b)=>b.revenue-a.revenue);
+    if(buArr.length>=2){
+      const top = buArr[0];
+      const totalRev = buArr.reduce((s,r)=>s+r.revenue,0)||1;
+      insights.push({
+        type:'neutral', icon:'◆',
+        title:`${top.name} is the largest business unit at ${(safeDiv(top.revenue,totalRev)*100).toFixed(0)}% of revenue`,
+        body:`Across the selected period, ${top.name} contributed ${fmtINR(top.revenue)} in revenue at ${top.gpPct.toFixed(1)}% GP. The next largest unit is ${buArr[1].name} at ${fmtINR(buArr[1].revenue)}.`,
+        action: top.gpPct < (buArr.reduce((s,r)=>s+r.gpPct,0)/buArr.length)
+          ? `${top.name} carries below-average GP% despite its scale — a small pricing or mix improvement here has outsized P&L impact.`
+          : `${top.name}'s GP% is healthy relative to the portfolio — protect its share as other units are grown.`
+      });
+    }
+  }
+
+  // 5. Regional performance spread
+  if(sr.length>=3){
+    const revs = sr.map(s=>s.revenue);
+    const top = sr[0], bottom = sr[sr.length-1];
+    const spread = safeDiv(top.revenue - bottom.revenue, bottom.revenue||1)*100;
+    insights.push({
+      type:'neutral', icon:'⌖',
+      title:`${top.name} outperforms ${bottom.name} by ${spread.toFixed(0)}%`,
+      body:`Regional performance is uneven: ${top.name} delivers ${fmtINR(top.revenue)} versus ${fmtINR(bottom.revenue)} in ${bottom.name}, despite both operating under the Aptronix network.`,
+      action:`Investigate whether the gap reflects market size/opportunity or execution — benchmark ATS and GP% (not just revenue) between the two.`
+    });
+  }
+
+  // 6. CSAT risk flag
+  const csatRows = getFilteredCSAT();
+  if(csatRows.length){
+    const byCentre = groupSum(csatRows.map(r=>({centre:r.centre, revenue:r.value, gp:0, txns:1})), r=>r.centre);
+    const low = [...byCentre.entries()].map(([k,v])=>({name:k, value:v.revenue/v.txns})).filter(c=>c.value<75).sort((a,b)=>a.value-b.value);
+    if(low.length){
+      insights.push({
+        type:'warn', icon:'⚠',
+        title:`${low.length} centre${low.length>1?'s':''} below 75% CSAT`,
+        body:`${low.slice(0,3).map(c=>c.name+' ('+c.value.toFixed(0)+'%)').join(', ')}${low.length>3?' and '+(low.length-3)+' more':''} are trending below the 75% CSAT threshold for the selected period.`,
+        action:`Flag these centres for a service-quality audit — low CSAT centres often precede revenue attrition in the following quarter.`
+      });
+    }
+  }
+
+  return insights;
+}
+
+function last_yoy_insight(series){
+  const withYoyVals = series.filter(s=>s.yoy!==null);
+  if(!withYoyVals.length) return null;
+  const last = withYoyVals[withYoyVals.length-1];
+  return {
+    type: last.yoy>=0?'good':'warn', icon: last.yoy>=0?'▲':'▼',
+    title:`Year-on-year revenue ${last.yoy>=0?'up':'down'} ${Math.abs(last.yoy).toFixed(1)}%`,
+    body:`${last.label} compares to the same month last year at ${fmtPct(last.yoy)} growth, reflecting ${last.yoy>=0?'expanding':'contracting'} demand versus the prior year.`,
+    action: last.yoy<0 ? `A negative YoY print despite any MoM stability suggests a structural shift (competition, pricing, or footfall) worth a deeper root-cause review.` : `Year-on-year growth is healthy — validate it is broad-based across centres rather than concentrated in one or two outliers.`
+  };
+}
+
+function detectOutlierCentres(){
+  // last two available COMPLETE months, unfiltered by month-range so it
+  // always has data, but respects entity filters. Excludes any
+  // in-progress month — a partial-month "outlier" would really just be
+  // an artifact of a few days' data, not a real statistical outlier.
+  const allMk = [...new Set(FACT_MONTH.map(r=>r[0]))].sort((a,b)=>a-b).filter(mk=>!isCurrentRealMonth(mk));
+  if(allMk.length<2) return null;
+  const mkLast = allMk[allMk.length-1], mkPrev = allMk[allMk.length-2];
+  const lastMap = {}, prevMap = {};
+  FACT_MONTH.forEach(([mk,c,rev])=>{
+    if(!centreMatches(c)) return;
+    if(mk===mkLast) lastMap[c]=rev;
+    if(mk===mkPrev) prevMap[c]=rev;
+  });
+  const moms = [];
+  Object.keys(lastMap).forEach(c=>{
+    if(prevMap[c]!==undefined && prevMap[c]>0){
+      moms.push({centre:c, mom: safeDiv(lastMap[c]-prevMap[c], prevMap[c])*100});
+    }
+  });
+  if(moms.length<4) return null;
+  const vals = moms.map(m=>m.mom);
+  const mean = vals.reduce((a,b)=>a+b,0)/vals.length;
+  const sd = stdev(vals) || 1;
+  const outliers = moms.filter(m=>Math.abs(m.mom-mean) > 1.5*sd).sort((a,b)=>Math.abs(b.mom-mean)-Math.abs(a.mom-mean));
+  if(!outliers.length) return null;
+  const o = outliers[0];
+  return {
+    type: o.mom>=0?'good':'warn', icon:'✦',
+    title:`${o.centre} is a statistical outlier this month (${fmtPct(o.mom)} MoM)`,
+    body:`Against a network average MoM movement of ${fmtPct(mean)}, ${o.centre} moved ${fmtPct(o.mom)} between ${monthLabel(mkPrev)} and ${monthLabel(mkLast)} — more than 1.5 standard deviations from the network mean.`,
+    action: o.mom>=0
+      ? `Understand what drove the spike (a scheme, bulk order, or new tie-up) — it may be replicable elsewhere.`
+      : `This drop warrants a same-week check-in with the centre manager to rule out data issues, stock-outs, or staffing gaps.`
+  };
+}
+
+function renderAI(){
+  const v = document.getElementById('view-ai');
+  v.innerHTML='';
+  v.appendChild(el('div',{class:'section-sub'}, 'Automatically generated from the current filter selection — narrative summaries, outliers, and suggested management actions. Recomputes as you change filters.'));
+  const insights = buildInsights();
+  if(!insights.length){
+    v.appendChild(el('div',{class:'empty-state'}, 'Not enough data in the current selection to generate insights. Try widening the filters.'));
+  } else {
+    insights.forEach(ins=>{
+      v.appendChild(el('div',{class:'insight-card '+ins.type},[
+        el('div',{class:'ihead'},[el('span',{class:'icon'},ins.icon), el('span',{class:'ititle'},ins.title)]),
+        el('p',{},ins.body),
+        el('div',{class:'action'},[el('b',{},'Suggested action: '), ins.action]),
+      ]));
+    });
+  }
+  currentExporter = null;
+}
+
+/* ================================================================
+   Master render
+   ================================================================ */
+const RENDERERS = {
+  exec: renderExec, revenue: renderRevenue, gp: renderGP, csat: renderCSAT, licenses: renderLicenses, targets: renderTargets,
+  centre: renderCentre, centreexplorer: renderCentreExplorer, stateperf: renderStatePerf, arm: renderARM, armexplorer: renderArmExplorer, bu: renderBU,
+  growth: renderGrowth, exceptions: renderExceptions, rankings: renderRankings, geo: renderGeo, ai: renderAI,
+};
+
+function renderAll(){
+  showActiveView();
+  const fn = RENDERERS[activeTab];
+  if(fn) fn();
+  document.getElementById('asof').textContent = 'Data: '+monthLabel(MIN_MK)+' – '+monthLabel(MAX_MK);
+}
+
+function populateDataConfidenceBar(){
+  const unmapped = CENTRES.filter(c=>c.State==='Unmapped').length;
+  document.getElementById('tb-coverage-line').innerHTML =
+    `Data through <b>${monthLabel(MAX_MK)}</b> — ${CENTRES.length} centres tracked`;
+  const pill = document.getElementById('tb-validation');
+  const pillText = document.getElementById('tb-validation-text');
+  if(unmapped>0){
+    pill.classList.add('warn');
+    pillText.textContent = `${unmapped} centre${unmapped>1?'s':''} unmapped`;
+  } else {
+    pillText.textContent = 'All centres mapped';
+  }
+}
+
+function init(){
+  initTheme();
+  restoreFromURL();
+  buildTabs();
+  buildViewShells();
+  buildFilterBar();
+  buildBreadcrumb();
+  populateDataConfidenceBar();
+  renderAll();
+  document.getElementById('loadOverlay').style.display='none';
+}
+
+window.addEventListener('chartjs-ready', function(){
+  renderAll(); // Chart.js finished loading asynchronously — redraw with real charts
+});
+window.addEventListener('lucide-ready', function(){
+  buildTabs(); // upgrade fallback glyphs to real icons once Lucide loads
+  const btn = document.getElementById('theme-toggle');
+  if(btn) lucide.createIcons();
+});
+
+// These are called directly from inline HTML attributes (onclick/oninput),
+// so they must exist on window, not just in this function's local scope.
+window.toggleTheme = toggleTheme;
+window.toggleSidebar = toggleSidebar;
+window.closeSidebar = closeSidebar;
+window.openCmdk = openCmdk;
+window.closeCmdk = closeCmdk;
+window.renderCmdkResults = renderCmdkResults;
+
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+
+}
+
+function __showLoadError(message){
+  var o = document.getElementById('loadOverlay');
+  if(!o) return;
+  o.innerHTML =
+    '<div style="max-width:440px;text-align:center;color:var(--text-dim);font-size:13px;line-height:1.5;">' +
+    '<div style="font-size:20px;margin-bottom:10px;">\u26A0\uFE0F</div>' +
+    '<div style="font-weight:600;color:var(--text);margin-bottom:8px;">Could not load data.json</div>' +
+    '<div>' + message + '</div>' +
+    '<div style="margin-top:10px;font-size:11.5px;">Make sure <code>data.json</code> sits in the same folder as ' +
+    'this file, and that this page is being served over http(s) \u2014 e.g. GitHub Pages \u2014 rather than ' +
+    'opened directly from disk.</div>' +
+    '</div>';
+}
+
+fetch('data.json', {cache: 'no-store'})
+  .then(function(res){
+    if(!res.ok) throw new Error('server responded with HTTP ' + res.status);
+    return res.json();
+  })
+  .then(function(raw){
+    __boot(raw).catch(function(err){
+      console.error(err);
+      __showLoadError('The dashboard failed to start: ' + (err && err.message ? err.message : err));
+    });
+  })
+  .catch(function(err){
+    console.error(err);
+    __showLoadError((err && err.message ? err.message : String(err)));
+  });
+</script>
+</body>
+</html>
