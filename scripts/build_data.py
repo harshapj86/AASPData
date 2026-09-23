@@ -546,15 +546,37 @@ def melt_month_sheet(xls, sheet_name, value_scale=1.0):
 
 
 def build_csat(xls):
+    """CSAT sheet layout: <blank/short-label> | Ship-To | Metrics | <month columns...>
+    Column A is a short informal label (e.g. "Banjara hills") that does NOT
+    match the canonical centre names used everywhere else in the dashboard
+    (fact_month, centres, filters all use "Service Banjara Hills" etc, from
+    Branch ID / Location Master's Centre Name). "Ship-To" is the column that
+    actually holds the matching canonical name here despite the name overlap
+    with Location Master's unrelated "Ship to ID" column used for incentives
+    — confusing, but confirmed against real data. Using column A instead
+    (an earlier version of this function did) silently breaks every CSAT
+    lookup dashboard-wide: nothing matches, so CSAT appears empty for every
+    centre and every date range, with no error anywhere to point at why.
+
+    "Metrics" also isn't just a spacer column — a sheet-wide "Average" row
+    has no centre and Metrics=None (not "CSAT"), so filtering on
+    Metrics=="CSAT" is what keeps that summary row out of the per-centre
+    data, not just a formality.
+    """
     if "CSAT" not in xls.sheet_names:
         print("WARNING: no 'CSAT' sheet found.")
         return []
     df = xls.parse("CSAT")
     if df.empty:
         return []
-    df = df.rename(columns={df.columns[0]: "Centre", df.columns[1]: "Metric"})
+    if len(df.columns) < 3:
+        print("WARNING: 'CSAT' sheet doesn't have the expected "
+              "<label> | Ship-To | Metrics | <months...> layout — skipping CSAT.")
+        return []
+    df = df.rename(columns={df.columns[1]: "Centre", df.columns[2]: "Metric"})
+    df = df[df["Metric"].astype(str).str.strip().str.upper() == "CSAT"]
     out = []
-    for col in df.columns[2:]:
+    for col in df.columns[3:]:
         mk = month_key_from_any(col)
         if mk is None:
             continue
