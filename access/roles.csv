@@ -1,37 +1,46 @@
-# roles.csv — who gets access to what
-#
+# roles.csv — who gets access to what,,,,
+#,,,,
 # Columns: email, role, scope, name (name is just for your reference, not used by the script)
-# role must be exactly one of: Admin, ARM, CentreManager
-# scope: blank for Admin, the ARM's name (exactly as in Location Master) for ARM,
-#        the centre's name (exactly as in Location Master) for CentreManager
-#
-# Multiple people can share the same role+scope - e.g. multiple Admin rows all
-# share the same /admin/ bundle and the same Cloudflare policy.
-# A centre with no CentreManager row here simply gets no bundle built for it.
-email,role,scope,name
-harsha@aptronixindia.com,Admin,,Harsha PJ
-YOUR-EMAIL-HERE,ARM,Hithayathullah PM,Hithayathullah PM
-YOUR-EMAIL-HERE,ARM,Naveen Sukka,Naveen Sukka
-YOUR-EMAIL-HERE,ARM,Radhamani Munda,Radhamani Munda
-
-# --- Centre Managers: uncomment and fill in the ones you want to grant access ---
-# Hithayathullah PM's centres:
-# YOUR-EMAIL-HERE,CentreManager,Service Bhimavaram,Service Bhimavaram manager
-# YOUR-EMAIL-HERE,CentreManager,Service Kakinada,Service Kakinada manager
-# YOUR-EMAIL-HERE,CentreManager,Service MG Road BLR,Service MG Road BLR manager
-# YOUR-EMAIL-HERE,CentreManager,Service PMC Chennai,Service PMC Chennai manager
-# YOUR-EMAIL-HERE,CentreManager,Service VR Chennai,Service VR Chennai manager
-# YOUR-EMAIL-HERE,CentreManager,Service Vijaywada,Service Vijaywada manager
-# YOUR-EMAIL-HERE,CentreManager,Service Vizag,Service Vizag manager
-# Naveen Sukka's centres:
-# YOUR-EMAIL-HERE,CentreManager,Service Abids,Service Abids manager
-# YOUR-EMAIL-HERE,CentreManager,Service Banjara Hills,Service Banjara Hills manager
-# YOUR-EMAIL-HERE,CentreManager,Service Begumpet,Service Begumpet manager
-# YOUR-EMAIL-HERE,CentreManager,Service Gachibowli,Service Gachibowli manager
-# YOUR-EMAIL-HERE,CentreManager,Service Inorbit,Service Inorbit manager
-# YOUR-EMAIL-HERE,CentreManager,Service Parklane,Service Parklane manager
-# YOUR-EMAIL-HERE,CentreManager,Service Sarath City,Service Sarath City manager
-# Radhamani Munda's centres:
-# YOUR-EMAIL-HERE,CentreManager,Service Logix Noida,Service Logix Noida manager
-# YOUR-EMAIL-HERE,CentreManager,Service Sunview,Service Sunview manager
-# YOUR-EMAIL-HERE,CentreManager,Service Vasant Kunj,Service Vasant Kunj manager
+# role must be exactly one of: Admin, ARM, CentreManager,,
+# scope: blank for Admin, the ARM's name (exactly as in Location Master) for ARM,,,
+#        the centre's name (exactly as in Location Master) for CentreManager,,,,
+#,,,,
+# Replace every YOUR-EMAIL-HERE below with the real email address for that person,,,,
+# then run: python scripts/build_access_bundles.py,,,,
+#,,,,
+# Multiple people can share the same role+scope (e.g. two people covering one,,,,
+# centre) - just add another row with the same role/scope and a different email.,,,,
+# A centre with no CentreManager row here simply gets no bundle built for it.,,,,
+email,role,scope,name,
+harsha@aptronixindia.com,Admin,,Harsha Pavagada Jayaramu,
+lokesh@aptronixindia.com,Admin,,Lokesh Kumar,
+dinesh@aptronixindia.com,Admin,,Dinesh Bhushanaveni,
+rajendra@aptronixindia.com,Admin,,Rajendra Pampari,
+kumar.nishant@plfipl.com,Admin,,Nishant Kumar,
+meghna.singh@plfipl.com,Admin,,Meghna Singh,
+hithayathullah@myaptronix.com,ARM,Hithayathullah PM,Hithayathullah PM,
+naveensukka1@aptronixindia.com,ARM,Naveen Sukka,Naveen Sukka,
+radhamani@myaptronix.com,ARM,Radhamani Munda,Radhamani Munda,
+,,,,
+# --- Centre Managers: uncomment and fill in the ones you want to grant access ---,,,,
+# One row per centre. Delete the leading '# ' to activate a row.,,,,
+# Hithayathullah PM's centres:,,,,
+jayasri.n@myaptronix.com,CentreManager,Service Bhimavaram,Service Bhimavaram manager,
+umamaheswararao@myaptronix.com,CentreManager,Service Kakinada,Service Kakinada manager,
+praveen_kumar@aptronixindia.com,CentreManager,Service MG Road BLR,Service MG Road BLR manager,
+antonistephen@myaptronix.com,CentreManager,Service PMC Chennai,Service PMC Chennai manager,
+venkatesan@myaptronix.com,CentreManager,Service VR Chennai,Service VR Chennai manager,
+ramu.devalla@myaptronix.com,CentreManager,Service Vijaywada,Service Vijaywada manager,
+umasekhar@myaptronix.com,CentreManager,Service Vizag,Service Vizag manager,
+# Naveen Sukka's centres:,,,,
+aziz@aptronixindia.com,CentreManager,Service Abids,Service Abids manager,
+mdasifuddin@myaptronix.com,CentreManager,Service Banjara Hills,Service Banjara Hills manager,
+richard.joy@myaptronix.com,CentreManager,Service Begumpet,Service Begumpet manager,
+bhujangarao@myaptronix.com,CentreManager,Service Gachibowli,Service Gachibowli manager,
+g.karthikeya@aptronixindia.com,CentreManager,Service Inorbit,Service Inorbit manager,
+kowsalya@myaptronix.com,CentreManager,Service Parklane,Service Parklane manager,
+c.naveen@myaptronix.com,CentreManager,Service Sarath City,Service Sarath City manager,
+# Radhamani Munda's centres:,,,,
+nihal.rathore@myaptronix.com,CentreManager,Service Logix Noida,Service Logix Noida manager,
+sanjay.kumar@aptronixindia.com,CentreManager,Service Sunview,Service Sunview manager,
+# YOUR-EMAIL-HERE,CentreManager,Service Vasant Kunj,Service Vasant Kunj manager,
