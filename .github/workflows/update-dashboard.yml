@@ -1,14 +1,17 @@
 name: Update Dashboard Data
 
+# Runs automatically whenever source/master.xlsx changes on the main branch.
+# Rebuilds data.json via scripts/build_data.py and commits it back, which
+# triggers GitHub Pages to redeploy with the new numbers.
 on:
   push:
     branches: [main]
     paths:
       - "source/master.xlsx"
-  workflow_dispatch: {}
+  workflow_dispatch: {}   # lets you trigger a manual rebuild from the Actions tab
 
 permissions:
-  contents: write
+  contents: write   # needed so the workflow can commit data.json back
 
 jobs:
   rebuild:
@@ -28,14 +31,22 @@ jobs:
       - name: Build data.json from master.xlsx
         run: python scripts/build_data.py source/master.xlsx --out data.json
 
+      - name: Build access-scoped bundles (if roles.csv exists)
+        run: |
+          if [ -f access/roles.csv ]; then
+            python scripts/build_access_bundles.py
+          else
+            echo "No access/roles.csv yet — skipping scoped bundles."
+          fi
+
       - name: Commit and push data.json if it changed
         run: |
           git config user.name "dashboard-bot"
           git config user.email "actions@github.com"
-          git add data.json
+          git add data.json access/site access/cloudflare-policies.md 2>/dev/null || git add data.json
           if git diff --cached --quiet; then
-            echo "No changes to data.json"
+            echo "No changes to commit."
           else
-            git commit -m "Auto-update data.json [skip ci]"
+            git commit -m "Auto-update data.json and access bundles [skip ci]"
             git push
           fi
