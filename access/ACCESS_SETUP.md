@@ -6,11 +6,11 @@ One Cloudflare Access **Application** per role, each pointing at its own
 folder on your site, each gated by its own email allow-list:
 
 ```
-yourdomain.pages.dev/admin/...              -> full company data
-yourdomain.pages.dev/arm/naveen-sukka/...    -> Naveen's 7 centres only
-yourdomain.pages.dev/arm/hithayathullah-pm/... -> Hitha's 7 centres only
-yourdomain.pages.dev/arm/radhamani-munda/... -> Radhamani's 3 centres only
-yourdomain.pages.dev/centre/<centre-name>/... -> one centre manager, one centre
+aaspdata.harshapj.workers.dev/admin/...              -> full company data
+aaspdata.harshapj.workers.dev/arm/naveen-sukka/...    -> Naveen's 7 centres only
+aaspdata.harshapj.workers.dev/arm/hithayathullah-pm/... -> Hitha's 7 centres only
+aaspdata.harshapj.workers.dev/arm/radhamani-munda/... -> Radhamani's 3 centres only
+aaspdata.harshapj.workers.dev/centre/<centre-name>/... -> one centre manager, one centre
 ```
 
 Each folder is a complete, self-contained copy of the dashboard with its
@@ -29,7 +29,7 @@ out, since a centre with no active row here simply gets no bundle built.
 ### 2. Push it
 Commit and push `access/roles.csv` as normal. The GitHub Action now runs
 `build_access_bundles.py` automatically after every `data.json` rebuild,
-producing all the scoped folders under `access/site/` and committing them
+producing all the scoped folders under `` and committing them
 back — same auto-deploy chain as everything else.
 
 ### 3. Check the generated policy list
@@ -44,7 +44,7 @@ Self-hosted.** For each entry in `cloudflare-policies.md`:
 - **Application name:** whatever's readable, e.g. "Aptronix — Naveen (ARM)"
 - **Session duration:** your call (e.g. 24 hours is reasonable for daily use)
 - **Application domain:** your Pages domain, with the path from the doc —
-  e.g. `yourdomain.pages.dev/arm/naveen-sukka`
+  e.g. `aaspdata.harshapj.workers.dev/arm/naveen-sukka`
 - **Policy:** Create a policy, action **Allow**, include rule **Emails** →
   paste the exact email(s) listed for that entry.
 
@@ -53,7 +53,7 @@ however many you actually configure in `roles.csv`).
 
 ### 5. Share the right link with each person
 Each person gets *their own URL* — the path from their Application, not the
-root domain. Naveen's link is `yourdomain.pages.dev/arm/naveen-sukka/`, not
+root domain. Naveen's link is `aaspdata.harshapj.workers.dev/arm/naveen-sukka/`, not
 your main link. When they open it, Cloudflare shows a "verify your email"
 screen, sends a one-time code, and once entered, they land straight on
 their own scoped dashboard.

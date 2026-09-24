@@ -43,7 +43,11 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA_PATH = ROOT / "data.json"
 INDEX_PATH = ROOT / "index.html"
 ROLES_PATH = ROOT / "access" / "roles.csv"
-SITE_OUT = ROOT / "access" / "site"
+SITE_OUT = ROOT  # bundles land as top-level folders (admin/, arm/<slug>/,
+# centre/<slug>/) directly at the repo root, matching how index.html at
+# the root already maps straight to the site's root URL — confirmed
+# working, so bundle folders follow the same direct mapping rather than
+# being nested under an extra access/site/ path.
 POLICY_DOC = ROOT / "access" / "cloudflare-policies.md"
 
 # Fields in data.json keyed by [MonthKey, Centre, ...] or [DateStr, Centre, ...]
