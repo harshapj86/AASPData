@@ -825,8 +825,16 @@ function getTargetForMonthCentre(arr, mk, centre){
 }
 
 function computeLiveProjection(){
-  const now = new Date();
-  const y=now.getFullYear(), m=now.getMonth()+1, d=now.getDate();
+  // Anchored to the most recent date actually present in the data
+  // (MAX_DATE), not the viewer's device clock (new Date()). Using the
+  // device's "today" here silently treats any day newer than the latest
+  // uploaded data as a complete, fully-elapsed working day with zero
+  // revenue -- understating the daily run-rate (and therefore the whole
+  // projection) every time the upload lags the calendar by even one day,
+  // which is the normal case, not an edge case (e.g. data through the
+  // 23rd, viewed on the 24th before that day's export is in).
+  const [maxY, maxM, maxD] = MAX_DATE.split('-').map(Number);
+  const y=maxY, m=maxM, d=maxD;
   const mk = y*100+m;
   const totalWD = workingDaysInMonth(mk);
   const elapsedWD = workingDaysElapsed(mk, d);
@@ -2690,8 +2698,12 @@ function renderTargets(){
   // above is filtered to. A single pass over FACT_DAY here, rather than
   // one scan per centre, keeps this cheap even with many centres.
   const projCtx = (()=>{
-    const now = new Date();
-    const y=now.getFullYear(), m=now.getMonth()+1, d=now.getDate();
+    // Same fix as computeLiveProjection() above: anchor on MAX_DATE (the
+    // last date actually present in the data), not the device clock, or
+    // this silently understates every centre's projection whenever the
+    // upload lags the calendar.
+    const [maxY, maxM, maxD] = MAX_DATE.split('-').map(Number);
+    const y=maxY, m=maxM, d=maxD;
     const mk = y*100+m;
     const monthPrefix = `${y}-${String(m).padStart(2,'0')}`;
     const todayStr = `${monthPrefix}-${String(d).padStart(2,'0')}`;
