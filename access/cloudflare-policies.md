@@ -7,7 +7,7 @@ For each row below, create one Cloudflare Access Application (Zero Trust -> Acce
 
 ## Admin (full company)
 - **Path:** `yourdomain.pages.dev/admin/`
-- **Policy emails:** dinesh@aptronixindia.com, harsha@aptronixindia.com, kumar.nishant@plfipl.com, lokesh@aptronixindia.com, meghna.singh@plfipl.com, rajendra@aptronixindia.com
+- **Policy emails:** dinesh@aptronixindia.com, harsha@aptronixindia.com, kumar.nishant@plfipl.com, lokesh@aptronixindia.com, mallesh@plfipl.com, meghna.singh@plfipl.com, rajendra@aptronixindia.com
 
 ## ARM — Hithayathullah PM (7 centres)
 - **Path:** `yourdomain.pages.dev/arm/hithayathullah-pm/`
