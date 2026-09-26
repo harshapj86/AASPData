@@ -172,7 +172,8 @@ a{color:var(--accent);}
   appearance:none;-webkit-appearance:none;-moz-appearance:none;
   border:none;background:transparent;color:var(--text);
   font-size:12.5px;font-weight:600;font-family:var(--font-body);
-  height:100%;cursor:pointer;min-width:0;
+  height:100%;cursor:pointer;min-width:0;max-width:150px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   padding-right:16px;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23697086' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat:no-repeat;background-position:right center;
@@ -188,6 +189,37 @@ a{color:var(--accent);}
 .fchip input[type=date]:focus{outline:none;}
 .fchip input[type=date]::-webkit-calendar-picker-indicator{opacity:.45;cursor:pointer;}
 .fchip input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:.8;}
+.multi-fchip{position:relative;}
+.multi-fchip-btn{
+  appearance:none;border:none;background:transparent;color:var(--text);
+  font-size:12.5px;font-weight:600;font-family:var(--font-body);
+  height:100%;cursor:pointer;padding:0 16px 0 0;white-space:nowrap;
+  max-width:150px;overflow:hidden;text-overflow:ellipsis;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23697086' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right center;
+}
+:root[data-theme="dark"] .multi-fchip-btn{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2395a0ba' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.multi-fchip-btn:focus{outline:none;}
+.multi-fchip-panel{
+  position:absolute;top:calc(100% + 6px);left:0;z-index:40;
+  min-width:220px;max-height:280px;overflow-y:auto;
+  background:var(--panel);border:1px solid var(--border);border-radius:10px;
+  box-shadow:0 8px 24px rgba(20,24,40,.14);padding:6px;
+}
+.multi-fchip-allrow{
+  font-size:12.5px;font-weight:600;color:var(--accent);
+  padding:7px 8px;cursor:pointer;border-radius:6px;
+}
+.multi-fchip-allrow:hover{background:var(--panel-alt,rgba(0,0,0,.04));}
+.multi-fchip-row{
+  display:flex;align-items:center;gap:8px;
+  font-size:12.5px;color:var(--text);
+  padding:6px 8px;cursor:pointer;border-radius:6px;
+}
+.multi-fchip-row:hover{background:var(--panel-alt,rgba(0,0,0,.04));}
+.multi-fchip-row input[type=checkbox]{cursor:pointer;}
 
 .filter-count-badge{
   height:38px;box-sizing:border-box;display:inline-flex;align-items:center;
@@ -551,6 +583,20 @@ const CSAT_MAP = {}; // mk|centre -> value
 CSAT.forEach(([mk,c,v])=>{CSAT_MAP[mk+'|'+c]=v;});
 
 const FYS = [...new Set(MONTHS.map(m=>m.FY))].sort();
+/* Apple's fiscal year: Oct-Sep, labelled by the calendar year it ends in
+   (Apple itself calls Oct'25-Sep'26 "fiscal 2026") - independent of
+   Aptronix's own Apr-Mar FY used everywhere else, so kept as its own
+   filter rather than folded into the existing FY/Quarter one. */
+function appleFYOf(mk){
+  const y = Math.floor(mk/100), m = mk%100;
+  const endYear = m>=10 ? y+1 : y;
+  return 'AppleFY'+String(endYear).slice(2);
+}
+function appleFyDateBounds(label){
+  const endYear = 2000 + parseInt(label.slice(-2));
+  return {from:`${endYear-1}-10-01`, to:`${endYear}-09-30`};
+}
+const APPLE_FYS = [...new Set(MONTHS.map(m=>appleFYOf(m.MonthKey)))].sort();
 const STATES = [...new Set(CENTRES.map(c=>c.State))].sort();
 const ARMS = [...new Set(CENTRES.map(c=>c.ARM))].sort();
 const BUS = [...new Set(FACT_BU.map(r=>r[2]))].sort();
@@ -585,15 +631,16 @@ const GP_VISIBLE = RAW.gpVisible !== false;
    Global filter state + drill path
    ------------------------------------------------------------ */
 const state = {
-  fy:'All', quarter:'All', dateFrom:MIN_DATE, dateTo:MAX_DATE,
-  state:'All', arm:'All', centre:'All', bu:'All', category:'All', locType:'All',
+  fy:'All', quarter:'All', appleFy:'All', dateFrom:MIN_DATE, dateTo:MAX_DATE,
+  state:'All', arm:'All', centre:'All', bu:[], category:'All', locType:'All',
 };
 let drillPath = [];
+let buPanelOpen = false; // UI-only: whether the Business Unit multi-select panel is open
 
 function resetFilters(){
-  state.fy='All'; state.quarter='All'; state.dateFrom=MIN_DATE; state.dateTo=MAX_DATE;
-  state.state='All'; state.arm='All'; state.centre='All'; state.bu='All'; state.category='All'; state.locType='All';
-  drillPath=[];
+  state.fy='All'; state.quarter='All'; state.appleFy='All'; state.dateFrom=MIN_DATE; state.dateTo=MAX_DATE;
+  state.state='All'; state.arm='All'; state.centre='All'; state.bu=[]; state.category='All'; state.locType='All';
+  drillPath=[]; buPanelOpen=false;
   syncFilterUI();
   renderAll();
   syncURL();
@@ -639,6 +686,7 @@ function monthInRange(mk){
   if(mk<mFrom || mk>mTo) return false;
   if(state.fy!=='All' && MONTH_MAP[mk].FY!==state.fy) return false;
   if(state.quarter!=='All' && MONTH_MAP[mk].Quarter!==state.quarter) return false;
+  if(state.appleFy!=='All' && appleFYOf(mk)!==state.appleFy) return false;
   return true;
 }
 function centreMatches(c){
@@ -679,7 +727,7 @@ function getFilteredBURows(){
   for(const [mk,c,bu,rev,gp,txns] of FACT_BU){
     if(!monthInRange(mk)) continue;
     if(!centreMatches(c)) continue;
-    if(state.bu!=='All' && bu!==state.bu) continue;
+    if(state.bu.length>0 && !state.bu.includes(bu)) continue;
     out.push({mk,centre:c,bu,revenue:rev,gp,txns});
   }
   return out;
@@ -804,7 +852,7 @@ function applyQuickFilter(kind){
   if(kind==='today') fromStr = todayStr;
   else if(kind==='wtd') fromStr = toDateStr(mostRecentMonday(now));
   else fromStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
-  state.fy='All'; state.quarter='All';
+  state.fy='All'; state.quarter='All'; state.appleFy='All';
   state.dateFrom = clampToDataRange(fromStr);
   state.dateTo = clampToDataRange(todayStr);
   onFilterChange();
@@ -1278,6 +1326,42 @@ function buildFilterBar(){
     sel.value = value;
     return el('div',{class:'fchip'},[el('span',{class:'fchip-label'},label), sel]);
   };
+  // Checkbox-panel multi-select — used for Business Unit, where selecting
+  // several at once (e.g. "OOW iOS + OOW Mac combined") is the actual ask,
+  // which a plain <select> can't do cleanly. buPanelOpen is UI-only state
+  // (not part of `state`, so it never touches the URL/breadcrumb) kept
+  // across re-renders so the panel doesn't slam shut after every single
+  // checkbox click — buildFilterBar() is rebuilt from scratch on every
+  // onFilterChange(), so without this the panel would close each time.
+  const mkMultiSelect = (label, options, selected, onChange, allLabel='All')=>{
+    const wrap = el('div',{class:'fchip multi-fchip'});
+    const summary = selected.length===0 ? allLabel
+      : selected.length===1 ? selected[0]
+      : selected.length+' selected';
+    const btn = el('button',{type:'button', class:'multi-fchip-btn', onclick:(e)=>{
+      e.stopPropagation();
+      buPanelOpen = !buPanelOpen;
+      buildFilterBar();
+    }}, summary);
+    wrap.appendChild(el('span',{class:'fchip-label'},label));
+    wrap.appendChild(btn);
+    if(buPanelOpen){
+      const panel = el('div',{class:'multi-fchip-panel', onclick:(e)=>e.stopPropagation()});
+      panel.appendChild(el('div',{class:'multi-fchip-allrow', onclick:()=>onChange([])}, allLabel));
+      options.forEach(o=>{
+        const checked = selected.includes(o);
+        const cb = el('input',{type:'checkbox'});
+        cb.checked = checked;
+        cb.addEventListener('change', ()=>{
+          const next = cb.checked ? [...selected, o] : selected.filter(x=>x!==o);
+          onChange(next);
+        });
+        panel.appendChild(el('label',{class:'multi-fchip-row'},[cb, document.createTextNode(' '+o)]));
+      });
+      wrap.appendChild(panel);
+    }
+    return wrap;
+  };
   const divider = ()=> el('div',{class:'fdivider'});
   const mainRow = el('div',{class:'filter-row-main'});
 
@@ -1290,7 +1374,7 @@ function buildFilterBar(){
   const todayStr = clampToDataRange(toDateStr(now));
   const wtdStr = clampToDataRange(toDateStr(mostRecentMonday(now)));
   const mtdStr = clampToDataRange(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`);
-  const quickActive = (from)=> state.fy==='All' && state.quarter==='All' && state.dateFrom===from && state.dateTo===todayStr;
+  const quickActive = (from)=> state.fy==='All' && state.quarter==='All' && state.appleFy==='All' && state.dateFrom===from && state.dateTo===todayStr;
   mainRow.appendChild(el('div',{class:'quick-filter-group'},[
     el('button',{class:'quick-btn'+(quickActive(todayStr)?' active':''), onclick:()=>applyQuickFilter('today')}, 'Today'),
     el('button',{class:'quick-btn'+(quickActive(wtdStr)?' active':''), onclick:()=>applyQuickFilter('wtd')}, 'WTD'),
@@ -1299,24 +1383,30 @@ function buildFilterBar(){
   mainRow.appendChild(divider());
 
   mainRow.appendChild(mkSelect('FY', FYS, state.fy, v=>{
-    state.fy=v; state.quarter='All';
+    state.fy=v; state.quarter='All'; state.appleFy='All';
     if(v!=='All'){ const b=fyDateBounds(v); state.dateFrom=clampToDataRange(b.from); state.dateTo=clampToDataRange(b.to); }
     else { state.dateFrom=MIN_DATE; state.dateTo=MAX_DATE; }
     onFilterChange();
   }, 'All years'));
   mainRow.appendChild(mkSelect('Quarter', ['Q1','Q2','Q3','Q4'], state.quarter, v=>{
-    state.quarter=v;
+    state.quarter=v; state.appleFy='All';
     if(v!=='All' && state.fy!=='All'){ const b=quarterDateBounds(state.fy,v); state.dateFrom=clampToDataRange(b.from); state.dateTo=clampToDataRange(b.to); }
     onFilterChange();
   }, 'All quarters'));
+  mainRow.appendChild(mkSelect('Apple FY', APPLE_FYS, state.appleFy, v=>{
+    state.appleFy=v; state.fy='All'; state.quarter='All';
+    if(v!=='All'){ const b=appleFyDateBounds(v); state.dateFrom=clampToDataRange(b.from); state.dateTo=clampToDataRange(b.to); }
+    else { state.dateFrom=MIN_DATE; state.dateTo=MAX_DATE; }
+    onFilterChange();
+  }, 'All Apple FYs'));
 
   // custom date range — exact-day precision, drives KPI cards; also sets month bounds for all breakdowns
   const fromDate = el('input',{type:'date', min:MIN_DATE, max:MAX_DATE, onchange:e=>{
-    state.dateFrom = e.target.value || MIN_DATE; state.fy='All'; state.quarter='All'; onFilterChange();
+    state.dateFrom = e.target.value || MIN_DATE; state.fy='All'; state.quarter='All'; state.appleFy='All'; onFilterChange();
   }});
   fromDate.value = state.dateFrom;
   const toDate = el('input',{type:'date', min:MIN_DATE, max:MAX_DATE, onchange:e=>{
-    state.dateTo = e.target.value || MAX_DATE; state.fy='All'; state.quarter='All'; onFilterChange();
+    state.dateTo = e.target.value || MAX_DATE; state.fy='All'; state.quarter='All'; state.appleFy='All'; onFilterChange();
   }});
   toDate.value = state.dateTo;
   mainRow.appendChild(el('div',{class:'fchip'},[el('span',{class:'fchip-label'},'From'), fromDate]));
@@ -1327,7 +1417,7 @@ function buildFilterBar(){
   mainRow.appendChild(mkSelect('ARM', ARMS, state.arm, v=>{state.arm=v; state.centre='All'; onFilterChange();}));
   const centreOptions = CENTRES.filter(c=>centreMatches(c.Centre) || true).map(c=>c.Centre).sort();
   mainRow.appendChild(mkSelect('Centre', centreOptions, state.centre, v=>{state.centre=v; onFilterChange();}));
-  mainRow.appendChild(mkSelect('Business Unit', BUS, state.bu, v=>{state.bu=v; onFilterChange();}));
+  mainRow.appendChild(mkMultiSelect('Business Unit', BUS, state.bu, v=>{state.bu=v; onFilterChange();}, 'All'));
   mainRow.appendChild(mkSelect('Location', LOC_TYPES, state.locType, v=>{state.locType=v; onFilterChange();}));
   bar.appendChild(mainRow);
 
@@ -1357,11 +1447,12 @@ function countActiveFilters(){
   let n = 0;
   if(state.fy!=='All') n++;
   if(state.quarter!=='All') n++;
-  if(state.fy==='All' && state.quarter==='All' && (state.dateFrom!==MIN_DATE || state.dateTo!==MAX_DATE)) n++;
+  if(state.appleFy!=='All') n++;
+  if(state.fy==='All' && state.quarter==='All' && state.appleFy==='All' && (state.dateFrom!==MIN_DATE || state.dateTo!==MAX_DATE)) n++;
   if(state.state!=='All') n++;
   if(state.arm!=='All') n++;
   if(state.centre!=='All') n++;
-  if(state.bu!=='All') n++;
+  if(state.bu.length>0) n++;
   if(state.category!=='All') n++;
   if(state.locType!=='All') n++;
   return n;
@@ -1381,10 +1472,11 @@ function buildBreadcrumb(){
   if(state.state!=='All') parts.push({label:'State: '+state.state, clear:()=>{state.state='All';state.arm='All';state.centre='All';}});
   if(state.arm!=='All') parts.push({label:'ARM: '+state.arm, clear:()=>{state.arm='All';state.centre='All';}});
   if(state.centre!=='All') parts.push({label:'Centre: '+state.centre, clear:()=>{state.centre='All';}});
-  if(state.bu!=='All') parts.push({label:'BU: '+state.bu, clear:()=>{state.bu='All';}});
+  if(state.bu.length>0) parts.push({label:'BU: '+(state.bu.length===1?state.bu[0]:state.bu.length+' selected'), clear:()=>{state.bu=[];}});
   if(state.category!=='All') parts.push({label:'Category: '+state.category, clear:()=>{state.category='All';}});
   if(state.fy!=='All') parts.push({label:state.fy, clear:()=>{state.fy='All';}});
   if(state.quarter!=='All') parts.push({label:state.quarter, clear:()=>{state.quarter='All';}});
+  if(state.appleFy!=='All') parts.push({label:state.appleFy, clear:()=>{state.appleFy='All';}});
   if(parts.length===0){ bc.style.display='none'; return; }
   bc.style.display='flex';
   parts.forEach((p,i)=>{
@@ -1524,6 +1616,13 @@ function selectCmdk(idx){
   }
   closeCmdk();
 }
+// Close the Business Unit multi-select panel on any click outside it.
+document.addEventListener('click', function(e){
+  if(buPanelOpen && !e.target.closest('.multi-fchip')){
+    buPanelOpen = false;
+    buildFilterBar();
+  }
+});
 document.addEventListener('keydown', function(e){
   const isCmdk = (e.metaKey || e.ctrlKey) && e.key.toLowerCase()==='k';
   if(isCmdk){
@@ -3111,13 +3210,13 @@ function renderBU(){
       {key:'txns', label:'Txns', render:r=>numCell(r.txns, fmtNum)},
     ],
     rows: sorted,
-    onRowClick: r=>{state.bu=r.name; onFilterChange();}
+    onRowClick: r=>{state.bu=[r.name]; onFilterChange();}
   }));
   v.appendChild(tablePanel);
 
   requestAnimationFrame(()=>{
     barChart('buChart', arr.slice(0,10).map(a=>a.name), [{label:'Revenue', data:arr.slice(0,10).map(a=>a.revenue), backgroundColor:'#3aa0ff', borderRadius:4}], {indexAxis:'y',
-      onBarClick:(label)=>{state.bu=label; onFilterChange();}});
+      onBarClick:(label)=>{state.bu=[label]; onFilterChange();}});
     lineChart('buTrend', mks.map(mk=>monthLabel(mk)), top5BU.map((bu,i)=>({
       label:bu, data:mks.map(mk=>(byMonthBU.get(mk)||{})[bu]||0), borderColor:PALETTE[i], pointRadius:0, tension:.3
     })));
@@ -3134,7 +3233,7 @@ function renderBU(){
 function renderLicenses(){
   const v = document.getElementById('view-licenses');
   v.innerHTML='';
-  const rows = getFilteredBURows().filter(r=>r.bu==='Licenses');
+  const rows = getFilteredLicenseRows();
   if(!rows.length){
     v.appendChild(el('div',{class:'empty-state'}, 'No Licenses data for the current filter selection.'));
     currentExporter = null;
