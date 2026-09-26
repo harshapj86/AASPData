@@ -3275,7 +3275,7 @@ function renderLicenses(){
     kpiCard('Latest YoY Growth (Units)', last&&last.yoyUnits!==null?fmtPct(last.yoyUnits):'—', null, last?deltaDir(last.yoyUnits):'flat'),
   ]));
 
-  const trendPanel = panel('License Revenue Trend', null, el('div',{class:'chart-wrap', style:'height:280px;'}, el('canvas',{id:'licTrend'})));
+  const trendPanel = panel('License Revenue & Units Trend', null, el('div',{class:'chart-wrap', style:'height:280px;'}, el('canvas',{id:'licTrend'})));
   const centreRows = groupSum(rows, r=>r.centre);
   const centreArr = [...centreRows.entries()].map(([k,v])=>({name:k, ...v, gpPct:safeDiv(v.gp,v.revenue)*100})).sort((a,b)=>b.revenue-a.revenue);
   const centrePanel = panel('License Revenue by Centre', null, el('div',{class:'chart-wrap', style:'height:280px;'}, el('canvas',{id:'licCentre'})));
@@ -3310,8 +3310,12 @@ function renderLicenses(){
 
   requestAnimationFrame(()=>{
     lineChart('licTrend', series.map(s=>s.label), [
-      {label:'License Revenue', data:series.map(s=>s.revenue), borderColor:'#a78bfa', backgroundColor:'rgba(167,139,250,.1)', fill:true, tension:.3, pointRadius:0},
-    ]);
+      {label:'License Revenue', data:series.map(s=>s.revenue), borderColor:'#a78bfa', backgroundColor:'rgba(167,139,250,.1)', fill:true, tension:.3, pointRadius:0, yAxisID:'y'},
+      {label:'Licenses Sold (units)', data:series.map(s=>s.txns), borderColor:'#e8b74e', backgroundColor:'rgba(232,183,78,.1)', fill:false, tension:.3, pointRadius:0, yAxisID:'y1'},
+    ], {scales:{
+      y:{position:'left', ticks:{color:'#8991a3'}, grid:{color:'#edf0f5'}},
+      y1:{position:'right', ticks:{color:'#8991a3'}, grid:{display:false}},
+    }});
     barChart('licCentre', centreArr.slice(0,15).map(c=>c.name), [{label:'Revenue', data:centreArr.slice(0,15).map(c=>c.revenue), backgroundColor:'#a78bfa', borderRadius:4}], {indexAxis:'y'});
   });
 
