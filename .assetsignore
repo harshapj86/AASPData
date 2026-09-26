@@ -1,0 +1,33 @@
+# Tells Cloudflare's Wrangler which files NOT to publish as public static
+# assets, even though they live in this same repo. Same syntax as
+# .gitignore -- this only affects what gets deployed to the live site, it
+# has no effect on git itself.
+#
+# Why each of these is here:
+#   source/               - master.xlsx is your private data source, and at
+#                            33+ MiB it's also well over Cloudflare's 25 MiB
+#                            per-file limit for a published asset. This was
+#                            the exact cause of every deployment failing
+#                            silently since FY23-24 was added.
+#   .git                  - Wrangler walks the real filesystem, which
+#                            includes git's own history folder -- this can
+#                            contain older, equally oversized copies of
+#                            master.xlsx from past commits, and should never
+#                            be public regardless of size (it's your full
+#                            commit history).
+#   access/roles.csv            - lists real email addresses per person/role.
+#   access/cloudflare-policies.md - same: real emails, auto-generated from roles.csv.
+#   scripts/, .github/, README.md - internal tooling and docs, not meant to
+#                            be part of the served site.
+#   .wrangler, node_modules, .DS_Store - build/OS artifacts, never useful public.
+
+.git
+.wrangler
+node_modules
+.DS_Store
+source/
+scripts/
+access/roles.csv
+access/cloudflare-policies.md
+.github/
+README.md
