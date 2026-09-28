@@ -1835,6 +1835,14 @@ function applySorting(id, rows, defaultKey, defaultDir='desc'){
   const s = tableSortState[id] || {key:defaultKey, dir:defaultDir};
   const arr = [...rows].sort((a,b)=>{
     const va=a[s.key], vb=b[s.key];
+    // Nulls/undefined (e.g. an achievement % with no target set) always
+    // sort to the bottom, regardless of direction — otherwise NaN from
+    // `null - null` etc. leaves the order effectively random.
+    const aMissing = va===null || va===undefined || (typeof va==='number' && isNaN(va));
+    const bMissing = vb===null || vb===undefined || (typeof vb==='number' && isNaN(vb));
+    if(aMissing && bMissing) return 0;
+    if(aMissing) return 1;
+    if(bMissing) return -1;
     if(typeof va==='string') return s.dir==='asc'? va.localeCompare(vb) : vb.localeCompare(va);
     return s.dir==='asc'? va-vb : vb-va;
   });
@@ -2824,13 +2832,14 @@ function renderTargets(){
     return {projected, projectedPct};
   }
 
-  const centreRows = Object.entries(centreTargetMap).map(([name,v])=>({
+  const centreRowsUnsorted = Object.entries(centreTargetMap).map(([name,v])=>({
     name, ...v,
     revAch: achPct(v.revActual, v.revTarget),
     gpAch: achPct(v.gpActual, v.gpTarget),
     licenseAch: achPct(v.licenseActual, v.licenseTarget),
     ...projectionFor(name),
-  })).sort((a,b)=>(b.revAch||0)-(a.revAch||0));
+  }));
+  const centreRows = applySorting('targets-centre', centreRowsUnsorted, 'revAch', 'desc');
 
   const tableCaption = el('div',{style:'font-size:11.5px;color:var(--text-faint);margin-bottom:10px;'},
     `Revenue Projected columns reflect ${mkToLabel(projCtx.mk)}'s run-rate so far (${projCtx.elapsedWD} of ${projCtx.totalWD} working days elapsed) regardless of the date range filtered above. License columns are unit counts, not revenue.`);
@@ -2853,6 +2862,7 @@ function renderTargets(){
         {key:'licenseAch', label:'License Achievement', render:r=>el('td',{class:'num'}, r.licenseAch!==null? el('span',{class:'pill '+(r.licenseAch>=100?'good':r.licenseAch>=80?'warn':'bad')}, r.licenseAch.toFixed(0)+'%') : '—')},
       ],
       rows: centreRows,
+      id: 'targets-centre',
       onRowClick: r=>{state.centre=r.name; onFilterChange();}
     })
   ]));
