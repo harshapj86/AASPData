@@ -40,6 +40,9 @@ WHAT IT PRODUCES (data.json)
       fact_month:   [[MonthKey, Centre, Revenue, GP, Txns], ...],
       fact_bu:      [[MonthKey, Centre, BusinessUnit, Revenue, GP, Txns], ...],
       fact_cat:     [[MonthKey, Centre, Category, Revenue, GP, Txns], ...],
+      fact_license_cat: [[MonthKey, Centre, Category, Revenue, GP, Txns], ...],
+        # Same shape as fact_cat but restricted to BU=="Licenses" rows only
+        # (Category here is Protect+ / AppleCare+ / Protect+ Renewal, etc.)
       fact_pf:      [[MonthKey, Centre, ProductFamily, Revenue, GP, Txns], ...],
       fact_item:    [[MonthKey, Centre, ItemName, Revenue, GP, Txns], ...],
       fact_txntype: [[MonthKey, Centre, TxnType, Revenue, GP, Txns], ...],
@@ -672,6 +675,17 @@ def build_master_data(xls):
         columns={"Branch ID": "Centre", "Business Unit": "BU"})
     fact_cat = group_sum(raw, ["MonthKey", "Branch ID", "Category"]).rename(
         columns={"Branch ID": "Centre"})
+    # License-only Category breakdown (Protect+, AppleCare+, Protect+
+    # Renewal, ...) — fact_cat above is global across every Business Unit,
+    # so it can't tell the Licenses tab which category a given month/centre
+    # slice belongs to. This mirrors fact_cat but scoped to BU=="Licenses"
+    # only, keyed the same way (MonthKey, Centre, Category), so the
+    # Licenses tab can pivot revenue/GP/units by category per centre and
+    # per month without any risk of double-counting into fact_cat's
+    # cross-BU totals.
+    license_raw = raw[raw["Business Unit"] == "Licenses"]
+    fact_license_cat = group_sum(license_raw, ["MonthKey", "Branch ID", "Category"]).rename(
+        columns={"Branch ID": "Centre"})
     fact_pf = group_sum(raw, ["MonthKey", "Branch ID", "Product Family"]).rename(
         columns={"Branch ID": "Centre", "Product Family": "PF"})
     fact_item = group_sum(raw, ["MonthKey", "Branch ID", "Item_Name"]).rename(
@@ -700,6 +714,7 @@ def build_master_data(xls):
         "fact_month": to_records(fact_month, ["MonthKey", "Centre", "Revenue", "GP", "Txns"]),
         "fact_bu": to_records(fact_bu, ["MonthKey", "Centre", "BU", "Revenue", "GP", "Txns"]),
         "fact_cat": to_records(fact_cat, ["MonthKey", "Centre", "Category", "Revenue", "GP", "Txns"]),
+        "fact_license_cat": to_records(fact_license_cat, ["MonthKey", "Centre", "Category", "Revenue", "GP", "Txns"]),
         "fact_pf": to_records(fact_pf, ["MonthKey", "Centre", "PF", "Revenue", "GP", "Txns"]),
         "fact_item": to_records(fact_item, ["MonthKey", "Centre", "Item", "Revenue", "GP", "Txns"]),
         "fact_txntype": to_records(fact_txntype, ["MonthKey", "Centre", "TxnType", "Revenue", "GP", "Txns"]),
