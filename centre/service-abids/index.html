@@ -572,6 +572,7 @@ const CENTRES = RAW.centres;                // [{Centre,State,ARM,LocationType,C
 const FACT_MONTH = RAW.fact_month;          // [mk,centre,revenue,gp,txns]
 const FACT_BU = RAW.fact_bu;                // [mk,centre,bu,revenue,gp,txns]
 const FACT_CAT = RAW.fact_cat;              // [mk,centre,category,revenue,gp,txns]
+const FACT_LICENSE_CAT = RAW.fact_license_cat || []; // [mk,centre,category,revenue,gp,txns] — Licenses BU only (Protect+, AppleCare+, Protect+ Renewal, ...); older data.json builds won't have this key yet
 const FACT_PF = RAW.fact_pf;                // [mk,centre,pf,revenue,gp,txns]
 const FACT_ITEM = RAW.fact_item;            // [mk,centre,item,revenue,gp,txns]
 const FACT_TXNTYPE = RAW.fact_txntype;      // [mk,centre,type,revenue,gp,txns]
@@ -731,6 +732,18 @@ function getFilteredLicenseRows(){
     if(!monthInRange(mk)) continue;
     if(!centreMatches(c)) continue;
     out.push({mk,centre:c,revenue:rev,gp,txns});
+  }
+  return out;
+}
+function getFilteredLicenseCatRows(){
+  // Same filter semantics as getFilteredLicenseRows() (ignores state.bu
+  // for the same reason), but keeps the Category dimension (Protect+,
+  // AppleCare+, Protect+ Renewal, ...) instead of collapsing it away.
+  const out=[];
+  for(const [mk,c,cat,rev,gp,txns] of FACT_LICENSE_CAT){
+    if(!monthInRange(mk)) continue;
+    if(!centreMatches(c)) continue;
+    out.push({mk,centre:c,category:cat,revenue:rev,gp,txns});
   }
   return out;
 }
@@ -3252,6 +3265,7 @@ function renderBU(){
 /* ================================================================
    VIEW: Licenses (dedicated Business Unit KPI, like CSAT/Revenue)
    ================================================================ */
+function catSlug(cat){ return 'cat_'+cat.replace(/[^a-zA-Z0-9]/g,'_'); }
 function renderLicenses(){
   const v = document.getElementById('view-licenses');
   v.innerHTML='';
@@ -3263,10 +3277,35 @@ function renderLicenses(){
   }
   const totals = sumRows(rows);
 
+  // Category breakdown (Protect+, AppleCare+, Protect+ Renewal, ...).
+  // Older data.json builds won't have fact_license_cat yet, so catRows can
+  // legitimately be empty — every use below degrades gracefully (an empty
+  // `categories` list just means no extra columns/panel get added, rather
+  // than breaking the rest of the tab).
+  const catRows = getFilteredLicenseCatRows();
+  const catMap = groupSum(catRows, r=>r.category);
+  const catArr = [...catMap.entries()]
+    .map(([name,v])=>({name, ...v, gpPct:safeDiv(v.gp,v.revenue)*100, share:safeDiv(v.revenue,totals.revenue)*100}))
+    .sort((a,b)=>b.revenue-a.revenue);
+  const categories = catArr.map(c=>c.name); // largest-revenue-first, drives column order everywhere below
+  const monthCatMap = {}; // mk -> category -> units
+  const centreCatMap = {}; // centre -> category -> units
+  catRows.forEach(r=>{
+    if(!monthCatMap[r.mk]) monthCatMap[r.mk] = {};
+    monthCatMap[r.mk][r.category] = (monthCatMap[r.mk][r.category]||0) + r.txns;
+    if(!centreCatMap[r.centre]) centreCatMap[r.centre] = {};
+    centreCatMap[r.centre][r.category] = (centreCatMap[r.centre][r.category]||0) + r.txns;
+  });
+
   // monthly series for Licenses only
   const byMonth = groupSum(rows, r=>r.mk);
   const mks = [...byMonth.keys()].sort((a,b)=>a-b);
-  let series = mks.map(mk=>({mk, label:monthLabel(mk), ...byMonth.get(mk), gpPct:safeDiv(byMonth.get(mk).gp,byMonth.get(mk).revenue)*100}));
+  let series = mks.map(mk=>{
+    const base = {mk, label:monthLabel(mk), ...byMonth.get(mk), gpPct:safeDiv(byMonth.get(mk).gp,byMonth.get(mk).revenue)*100};
+    const catForMonth = monthCatMap[mk] || {};
+    categories.forEach(cat=>{ base[catSlug(cat)] = catForMonth[cat]||0; });
+    return base;
+  });
   series = withYoY(withMoM(series));
   // Unit-based growth (licenses sold), computed alongside the shared
   // revenue-based mom/yoy above rather than replacing it globally — other
@@ -3299,9 +3338,35 @@ function renderLicenses(){
 
   const trendPanel = panel('License Revenue & Units Trend', null, el('div',{class:'chart-wrap', style:'height:280px;'}, el('canvas',{id:'licTrend'})));
   const centreRows = groupSum(rows, r=>r.centre);
-  const centreArr = [...centreRows.entries()].map(([k,v])=>({name:k, ...v, gpPct:safeDiv(v.gp,v.revenue)*100})).sort((a,b)=>b.revenue-a.revenue);
+  const centreArr = [...centreRows.entries()].map(([k,v])=>{
+    const row = {name:k, ...v, gpPct:safeDiv(v.gp,v.revenue)*100};
+    const catForCentre = centreCatMap[k] || {};
+    categories.forEach(cat=>{ row[catSlug(cat)] = catForCentre[cat]||0; });
+    return row;
+  }).sort((a,b)=>b.revenue-a.revenue);
   const centrePanel = panel('License Revenue by Centre', null, el('div',{class:'chart-wrap', style:'height:280px;'}, el('canvas',{id:'licCentre'})));
   v.appendChild(el('div',{class:'grid2'},[trendPanel, centrePanel]));
+
+  // Category breakdown — revenue/GP/units per license type, plus its
+  // share of total license revenue, for the current filter selection.
+  if(categories.length){
+    const catTableId = 'licCatTable';
+    const catSorted = applySorting(catTableId, catArr, 'revenue');
+    const catTablePanel = panel('License Sales by Category', categories.length+' categories', dataTable({
+      id: catTableId,
+      columns:[
+        {key:'name', label:'Category'},
+        {key:'revenue', label:'Revenue', render:r=>numCell(r.revenue)},
+        {key:'gp', label:'GP', render:r=>numCell(r.gp)},
+        {key:'gpPct', label:'GP%', render:r=>el('td',{class:'num'}, r.gpPct.toFixed(1)+'%')},
+        {key:'txns', label:'Units Sold', render:r=>numCell(r.txns, fmtNum)},
+        {key:'share', label:'Revenue Share', render:r=>el('td',{class:'num'}, r.share.toFixed(1)+'%')},
+      ],
+      rows: catSorted,
+    }));
+    const catChartPanel = panel('License Revenue Share by Category', null, el('div',{class:'chart-wrap', style:'height:240px;'}, el('canvas',{id:'licCatDonut'})));
+    v.appendChild(el('div',{class:'grid2'},[catChartPanel, catTablePanel]));
+  }
 
   const tableId = 'licTable';
   const sorted = applySorting(tableId, centreArr, 'revenue');
@@ -3313,6 +3378,7 @@ function renderLicenses(){
       {key:'gp', label:'GP', render:r=>numCell(r.gp)},
       {key:'gpPct', label:'GP%', render:r=>el('td',{class:'num'}, r.gpPct.toFixed(1)+'%')},
       {key:'txns', label:'Licenses Sold (units)', render:r=>numCell(r.txns, fmtNum)},
+      ...categories.map(cat=>({key:catSlug(cat), label:cat+' (units)', render:r=>numCell(r[catSlug(cat)], fmtNum)})),
     ],
     rows: sorted,
     onRowClick: r=>{state.centre=r.name; onFilterChange();}
@@ -3322,6 +3388,7 @@ function renderLicenses(){
     columns:[
       {key:'label', label:'Month'},
       {key:'txns', label:'Licenses Sold (units)', render:r=>numCell(r.txns, fmtNum)},
+      ...categories.map(cat=>({key:catSlug(cat), label:cat+' (units)', render:r=>numCell(r[catSlug(cat)], fmtNum)})),
       {key:'revenue', label:'Revenue (ref)', render:r=>numCell(r.revenue)},
       {key:'momUnits', label:'MoM % (Units)', render:r=>pctCell(r.momUnits)},
       {key:'yoyUnits', label:'YoY % (Units)', render:r=>pctCell(r.yoyUnits)},
@@ -3339,10 +3406,15 @@ function renderLicenses(){
       y1:{position:'right', ticks:{color:'#8991a3'}, grid:{display:false}},
     }});
     barChart('licCentre', centreArr.slice(0,15).map(c=>c.name), [{label:'Revenue', data:centreArr.slice(0,15).map(c=>c.revenue), backgroundColor:'#a78bfa', borderRadius:4}], {indexAxis:'y'});
+    if(categories.length){
+      doughnutChart('licCatDonut', catArr.map(c=>c.name), catArr.map(c=>c.revenue), PALETTE.slice(0,catArr.length));
+    }
   });
 
   currentExporter = {filename:'licenses_by_centre.csv', columns:[
-    {key:'name',label:'Centre'},{key:'revenue',label:'Revenue'},{key:'gp',label:'GP'},{key:'gpPct',label:'GP%'}
+    {key:'name',label:'Centre'},{key:'revenue',label:'Revenue'},{key:'gp',label:'GP'},{key:'gpPct',label:'GP%'},
+    {key:'txns',label:'Licenses Sold (units)'},
+    ...categories.map(cat=>({key:catSlug(cat), label:cat+' (units)'})),
   ], rows: sorted};
 }
 
